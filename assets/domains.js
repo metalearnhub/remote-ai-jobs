@@ -70,6 +70,20 @@ window.RJ_DOMAINS = {
     prep: ['Prepare a lesson you taught and how you checked understanding', 'Practise rewriting a confusing explanation for a specific grade level', 'Bring one rubric you\'ve used'],
     tag: 'EducationJobs',
   },
+  'E-commerce & retail': {
+    kw: ['e-commerce', 'ecommerce', 'catalog', 'merchandising', 'shopping', 'retail', 'product taxonomy', 'online store'],
+    who: 'e-commerce and catalog pros', verb: 'build realistic online stores and test how AI shops, searches and recommends',
+    fit: ['You\'ve run or managed real online store catalogs, not just bought from them', 'Messy product data (variants, sizes, categories) is something you fix for a living', 'You can spot when a shopping answer would frustrate a real customer'],
+    prep: ['Pick one catalog you structured: categories, attributes, how you handled variants', 'Prepare an example of normalising messy product data, with before and after', 'Be ready to design a tricky shopping scenario and the right answer for it'],
+    tag: 'Ecommerce',
+  },
+  'Game development': {
+    kw: ['game developer', 'game engine', 'gameplay', 'unity', 'unreal', 'godot', 'game development', 'playtest'],
+    who: 'game developers', verb: 'build game scenes with planted bugs and feature challenges for AI agents',
+    fit: ['You\'ve shipped or published games: AAA, indie, jam or solo all count', 'You know Unity, Godot or Unreal well enough to debug gameplay logic', 'You can write a bug report or feature brief a stranger could follow'],
+    prep: ['Gather your best portfolio links (itch.io, Steam, GitHub, jam entries); it matters most', 'Prepare one gameplay bug you hunted down: symptom, cause, fix', 'Practise writing success criteria: input sequence, expected on-screen result'],
+    tag: 'GameDev',
+  },
   'General AI training': {
     kw: [],
     who: 'experienced professionals', verb: 'evaluate and improve AI answers in their field',
