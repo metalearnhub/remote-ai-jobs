@@ -1,6 +1,7 @@
 // Turns one public micro1 job page (jobs.micro1.ai/post/<id>) into a full job page + Threads posts.
 // Runs in Deno (edge function) and Node (local tests). No AI calls: everything is derived from the posting.
 import { DOMAINS } from "./domains.js";
+import { domainFromSlug } from "./tax.js";
 
 export const POST_RE = /^https:\/\/jobs\.micro1\.ai\/post\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:[/?#].*)?$/i;
 
@@ -42,6 +43,7 @@ export function extract(html) {
   if (!desc && ld) desc = resolveRef(s, ld.description) || "";
   return {
     id: data.client_job_id || "",
+    domainSlug: String(data.domain_slug || ""),
     title: (data.job_role_name || ld?.title || "").trim(),
     hourly: data.ideal_hourly_rate || null,
     yearly: data.ideal_yearly_compensation || null,
@@ -152,8 +154,9 @@ export function build(x, referralUrl, siteUrl = "https://jobs.dijaedadula.com") 
   const sec = sections(x.desc);
   const title = x.title || sec.meta["job title"] || sec.meta["role title"] || "Remote AI role";
   const all = sec.text.join(" ");
-  const domain = detectDomain(title, [x.skills.join(" "), sec.scope.join(" "), sec.req.join(" ")].join(" "));
-  const d = DOMAINS[domain];
+  let domain = detectDomain(title, [x.skills.join(" "), sec.scope.join(" "), sec.req.join(" ")].join(" "));
+  if (domain === "General AI training") domain = domainFromSlug(x.domainSlug) || domain;
+  const d = DOMAINS[domain] || DOMAINS["General AI training"];
 
   // type
   const rawType = (sec.meta["job type"] || sec.meta["role type"] || sec.meta["employment type"] || "").toLowerCase();

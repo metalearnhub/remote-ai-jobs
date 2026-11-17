@@ -24,7 +24,11 @@
       <p class="err" id="err" hidden></p>
     </form>
   </section>
-  <h2>Open roles</h2>
+  <div class="row between" style="align-items:baseline;gap:10px;flex-wrap:wrap"><h2 style="margin:0">Open roles</h2><span class="muted small" id="count"></span></div>
+  <div class="filters" id="filters" hidden>
+    <div class="frow" id="fdom" role="group" aria-label="Filter by domain"></div>
+    <div class="frow" id="fskill" role="group" aria-label="Filter by skill"></div>
+  </div>
   <div class="list" id="list"><div class="empty">Loading roles…</div></div>
   <div class="steps3">
     <div><b>1 · Pick a role you've done</b><span class="muted">Only apply where you could talk for 20 minutes about real work.</span></div>

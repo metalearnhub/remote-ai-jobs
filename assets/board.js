@@ -2,12 +2,42 @@
   const FN = window.RJ_FN;
   const esc = (x) => String(x ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const list = document.getElementById('list');
-  fetch(FN + '?a=list').then((r) => r.json()).then((d) => {
-    const jobs = d.jobs || [];
-    if (!jobs.length) { list.innerHTML = '<div class="empty">No roles open right now. Leave your email above and you\'ll hear first when one opens.</div>'; return; }
-    list.innerHTML = jobs.map((j) => `<a class="card" href="/j/${esc(j.slug)}"><div><div class="chips" style="margin:0"><span class="chip dom">${esc(j.domain)}</span><span class="chip">${esc(j.job_type || 'Remote')}</span></div>
-      <h3>${esc(j.title)}</h3><span class="muted small">${esc(String(j.about || '').slice(0, 150))}${String(j.about || '').length > 150 ? '…' : ''}</span></div>
-      <div class="pay">${esc(j.pay_text || '')}<small>as posted · ${esc(j.company || '')}</small></div></a>`).join('');
+  const qs = new URLSearchParams(location.search);
+  let D = qs.get('d') || '', S = qs.get('s') || '', JOBS = [], TAX = { domains: [], skills: [] };
+  const tagsOf = (j) => (j.tags && j.tags.length ? j.tags : (j.skills || []).slice(0, 3));
+  function sync() {
+    const u = new URL(location.href); D ? u.searchParams.set('d', D) : u.searchParams.delete('d'); S ? u.searchParams.set('s', S) : u.searchParams.delete('s');
+    history.replaceState(null, '', u.pathname + (u.search || '') + u.hash);
+  }
+  function chip(label, n, on, kind) { return `<button type="button" class="fchip${on ? ' on' : ''}" data-k="${kind}" data-v="${esc(label)}" aria-pressed="${on}">${esc(label)}${n != null ? ` <i>${n}</i>` : ''}</button>`; }
+  function draw() {
+    const inD = JOBS.filter((j) => !D || j.domain === D);
+    const shown = inD.filter((j) => !S || tagsOf(j).includes(S));
+    const fd = document.getElementById('fdom'), fs = document.getElementById('fskill');
+    const doms = TAX.domains.length ? TAX.domains : Array.from(new Set(JOBS.map((j) => j.domain))).map((name) => ({ name, count: JOBS.filter((j) => j.domain === name).length }));
+    fd.innerHTML = chip('All fields', JOBS.length, !D, 'd') + doms.map((d) => chip(d.name, d.count, D === d.name, 'd')).join('');
+    const sc = {}; inD.forEach((j) => tagsOf(j).forEach((t) => (sc[t] = (sc[t] || 0) + 1)));
+    const skills = Object.entries(sc).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, 14);
+    fs.innerHTML = skills.length > 1 || S ? `<span class="muted small">Skills:</span>` + skills.map(([n, c]) => chip(n, c, S === n, 's')).join('') + (S && !sc[S] ? chip(S, 0, true, 's') : '') : '';
+    document.getElementById('filters').hidden = JOBS.length < 2;
+    document.getElementById('count').innerHTML = `${shown.length} role${shown.length === 1 ? '' : 's'}${D || S ? ' · <a href="/" id="clr">clear filters</a>' : ''}`;
+    const clr = document.getElementById('clr'); if (clr) clr.onclick = (e) => { e.preventDefault(); D = S = ''; sync(); draw(); };
+    list.innerHTML = shown.length ? shown.map((j) => `<a class="card" href="/j/${esc(j.slug)}"><div><div class="chips" style="margin:0"><span class="chip dom">${esc(j.domain)}</span><span class="chip">${esc(j.job_type || 'Remote')}</span></div>
+      <h3>${esc(j.title)}</h3><span class="muted small">${esc(String(j.about || '').slice(0, 150))}${String(j.about || '').length > 150 ? '…' : ''}</span>
+      ${tagsOf(j).length ? `<div class="tags">${tagsOf(j).slice(0, 4).map((t) => `<span>${esc(t)}</span>`).join('')}</div>` : ''}</div>
+      <div class="pay">${esc(j.pay_text || '')}<small>as posted · ${esc(j.company || '')}</small></div></a>`).join('')
+      : '<div class="empty">No open roles match this filter right now. <a href="/">See all roles</a> or leave your email above to hear when one opens.</div>';
+  }
+  document.getElementById('filters').addEventListener('click', (e) => {
+    const b = e.target.closest('.fchip'); if (!b) return;
+    if (b.dataset.k === 'd') { D = b.dataset.v === 'All fields' ? '' : (D === b.dataset.v ? '' : b.dataset.v); S = ''; }
+    else S = S === b.dataset.v ? '' : b.dataset.v;
+    sync(); draw();
+  });
+  Promise.all([fetch(FN + '?a=list').then((r) => r.json()), fetch(FN + '?a=taxonomy').then((r) => r.json()).catch(() => ({}))]).then(([d, t]) => {
+    JOBS = d.jobs || []; TAX = { domains: (t && t.domains) || [], skills: (t && t.skills) || [] };
+    if (!JOBS.length) { list.innerHTML = '<div class="empty">No roles open right now. Leave your email above and you\'ll hear first when one opens.</div>'; return; }
+    draw();
   }).catch(() => { list.innerHTML = '<div class="empty">Couldn\'t load roles. Refresh in a moment.</div>'; });
 
   const f = document.getElementById('sub');

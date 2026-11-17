@@ -59,6 +59,7 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--a
 .crumbs a { color: var(--ink-2); text-decoration: none; }
 .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 14px; }
 .chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px; border-radius: 99px; background: var(--sunk); font-size: .84rem; font-weight: 600; color: var(--ink-2); }
+a.chip { text-decoration: none; }
 .chip.dom { background: var(--accent-soft); color: var(--accent); }
 .chip.closed { background: color-mix(in srgb, var(--bad) 14%, var(--surface)); color: var(--bad); }
 .lead-p { font-size: 1.15rem; color: var(--ink-2); max-width: 62ch; }
@@ -75,7 +76,9 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--a
 .sec li::before { content: ''; position: absolute; left: 4px; top: .62em; width: 9px; height: 9px; border-radius: 3px; background: var(--accent); transform: rotate(45deg); }
 .sec.fit li::before { background: var(--pay); border-radius: 50%; transform: none; }
 .skills { display: flex; flex-wrap: wrap; gap: 8px; }
-.skills span { border: 1.5px solid var(--line); border-radius: 10px; padding: 6px 12px; font-weight: 600; font-size: .92rem; background: var(--surface); }
+.skills a, .skills span { color: var(--ink); text-decoration: none; }
+.skills a:hover { border-color: var(--accent); color: var(--accent); }
+.skills span, .skills a { border: 1.5px solid var(--line); border-radius: 10px; padding: 6px 12px; font-weight: 600; font-size: .92rem; background: var(--surface); }
 .take { border-left: 4px solid var(--accent); background: var(--surface); border-radius: 0 var(--r-m) var(--r-m) 0; padding: 18px 22px; }
 .take p { font: italic 1.2rem/1.55 var(--serif); margin: 0 0 8px; }
 .take small { color: var(--ink-2); font-weight: 600; }
@@ -118,6 +121,18 @@ details.faq p { margin: 10px 0 0; color: var(--ink-2); }
 .card { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 18px; align-items: center; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-m); padding: 20px 22px; text-decoration: none; color: inherit; }
 .card:hover { border-color: var(--ink); }
 .card h3 { font-size: 1.25rem; margin: 6px 0 4px; }
+.filters { display: grid; gap: 10px; margin: 14px 0 6px; }
+.frow { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; align-items: center; padding-bottom: 2px; }
+.frow::-webkit-scrollbar { display: none; }
+.fchip { flex: none; border: 1.5px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 99px; padding: 7px 13px; font-weight: 600; font-size: .88rem; cursor: pointer; white-space: nowrap; }
+.fchip i { font-style: normal; color: var(--ink-2); font-weight: 500; margin-left: 2px; }
+.fchip:hover { border-color: var(--ink); }
+.fchip.on { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.fchip.on i { color: inherit; opacity: .75; }
+#fskill .fchip { font-size: .82rem; padding: 5px 11px; }
+.tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.tags span { font-size: .78rem; font-weight: 600; color: var(--ink-2); border: 1px solid var(--line); border-radius: 8px; padding: 3px 8px; }
+.row.between { display: flex; justify-content: space-between; }
 .card .pay { color: var(--pay); font-weight: 800; white-space: nowrap; text-align: right; }
 .card .pay small { display: block; color: var(--ink-2); font-weight: 500; font-size: .76rem; }
 .empty { border: 1.5px dashed var(--line); border-radius: var(--r-m); padding: 28px; color: var(--ink-2); text-align: center; }

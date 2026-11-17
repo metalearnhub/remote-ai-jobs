@@ -4,6 +4,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2.45.4";
 import nodemailer from "npm:nodemailer@6.9.16";
 import { POST_RE, extract, build, threads, slugify } from "./gen.js";
+import { classify } from "./tax.js";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -14,7 +15,7 @@ const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SE
 const EMAIL = /^[^\s@<>"']{1,64}@[^\s@<>"']{1,190}\.[A-Za-z]{2,24}$/;
 const SLUG = /^[a-z0-9-]{2,90}$/;
 const NL = "https://qbubwemdvwflxvxwesrl.supabase.co/functions/v1/nl";
-const PUBLIC_COLS = "slug,title,domain,company,pay_text,job_type,openings,skills,about,scope,preferred,fit,take,prep,status,published_at,updated_at";
+const PUBLIC_COLS = "slug,title,domain,company,pay_text,job_type,openings,skills,tags,about,scope,preferred,fit,take,prep,status,published_at,updated_at";
 const CONSENT = "Send me instant alerts for remote AI roles and the free guide (job-alerts). Unsubscribe anytime.";
 
 function j(body: unknown, status = 200, cache = "no-store") {
@@ -120,6 +121,64 @@ async function go(b: any) {
   return j({ ok: true, url: job.referral_url });
 }
 
+// ---------- taxonomy: domains + canonical major skills ----------
+async function skillTable() {
+  const { data: sk } = await db.from("rj_skills").select("id,name,domain,aliases");
+  const { data: jobs } = await db.from("rj_jobs").select("tags");
+  const uses: Record<string, number> = {};
+  for (const r of jobs || []) for (const t of r.tags || []) uses[t] = (uses[t] || 0) + 1;
+  return (sk || []).map((x: any) => ({ ...x, uses: uses[x.name] || 0 }));
+}
+async function ensureDomain(name: string) {
+  if (name) await db.from("rj_domains").upsert({ name }, { onConflict: "name", ignoreDuplicates: true });
+}
+async function tagJob(raw: string[], domain: string, text: string) {
+  const r = classify(raw || [], domain, await skillTable(), text || "");
+  for (const c of r.create) await db.from("rj_skills").upsert({ name: c.name, domain: c.domain, aliases: c.aliases }, { onConflict: "name", ignoreDuplicates: true });
+  for (const a of r.alias) {
+    const { data: e } = await db.from("rj_skills").select("id,aliases").eq("name", a.name).maybeSingle();
+    if (e && !(e.aliases || []).includes(a.alias)) await db.from("rj_skills").update({ aliases: [...(e.aliases || []), a.alias].slice(0, 40) }).eq("id", e.id);
+  }
+  return r.tags;
+}
+async function retagAll() {
+  const { data: jobs } = await db.from("rj_jobs").select("id,skills,domain,scope,title");
+  const out: any[] = [];
+  for (const jb of jobs || []) {
+    await ensureDomain(jb.domain);
+    const tags = await tagJob(jb.skills || [], jb.domain, (jb.scope || []).join(" ") + " " + jb.title);
+    await db.from("rj_jobs").update({ tags }).eq("id", jb.id);
+    out.push({ id: jb.id, tags });
+  }
+  return { ok: true, jobs: out };
+}
+async function taxonomy(liveOnly: boolean) {
+  const { data: jobs } = await db.from("rj_jobs").select("domain,tags,status");
+  const dc: Record<string, number> = {}, sc: Record<string, number> = {};
+  for (const r of jobs || []) { if (liveOnly && r.status !== "live") continue; dc[r.domain] = (dc[r.domain] || 0) + 1; for (const t of r.tags || []) sc[t] = (sc[t] || 0) + 1; }
+  const { data: doms } = await db.from("rj_domains").select("name,sort").order("sort").order("name");
+  const { data: sk } = await db.from("rj_skills").select("name,domain,aliases").order("name");
+  const domains = (doms || []).map((d: any) => ({ name: d.name, count: dc[d.name] || 0 })).filter((d: any) => !liveOnly || d.count);
+  const skills = (sk || []).map((x: any) => ({ name: x.name, domain: x.domain, count: sc[x.name] || 0, ...(liveOnly ? {} : { aliases: x.aliases || [] }) })).filter((x: any) => !liveOnly || x.count).sort((a: any, b: any) => b.count - a.count || a.name.localeCompare(b.name));
+  return { domains, skills };
+}
+async function renameSkill(from: string, to: string) {
+  from = String(from || "").trim(); to = String(to || "").trim().slice(0, 80);
+  if (!from || !to || from === to) return { error: "Pick two different names." };
+  const { data: a } = await db.from("rj_skills").select("id,aliases").eq("name", from).maybeSingle();
+  if (!a) return { error: "Skill not found." };
+  const { data: b } = await db.from("rj_skills").select("id,aliases").eq("name", to).maybeSingle();
+  if (b) {
+    await db.from("rj_skills").update({ aliases: Array.from(new Set([...(b.aliases || []), from, ...(a.aliases || [])])).slice(0, 60) }).eq("id", b.id);
+    await db.from("rj_skills").delete().eq("id", a.id);
+  } else {
+    await db.from("rj_skills").update({ name: to, aliases: Array.from(new Set([...(a.aliases || []), from])) }).eq("id", a.id);
+  }
+  const { data: jobs } = await db.from("rj_jobs").select("id,tags").contains("tags", [from]);
+  for (const jb of jobs || []) await db.from("rj_jobs").update({ tags: Array.from(new Set((jb.tags || []).map((t: string) => (t === from ? to : t)))) }).eq("id", jb.id);
+  return { ok: true, merged: !!b, jobs: (jobs || []).length };
+}
+
 // ---------- link → page (one public job page per link, only when Dijae submits it) ----------
 async function fetchPost(id: string) {
   const r = await fetch(`https://jobs.micro1.ai/post/${id}`, { headers: { "User-Agent": "Mozilla/5.0 (compatible; RemoteAIWork/1.0; +https://jobs.dijaedadula.com)", "Accept": "text/html" }, redirect: "follow" });
@@ -145,10 +204,12 @@ async function ingest(list: unknown, refresh: boolean) {
       if (ex) {
         // keep curated text; refresh the facts that change and the posts
         const upd: any = { pay_text: g.pay_text || ex.pay_text, openings: g.openings, status: g.status === "closed" ? "closed" : ex.status, referral_url: u, updated_at: new Date().toISOString() };
+        await ensureDomain(ex.domain);
+        upd.tags = await tagJob(x.skills.length ? x.skills : ex.skills || [], ex.domain, (ex.scope || []).join(" ") + " " + ex.title);
         upd.threads = threads({ ...ex, ...upd }, ex.slug, base);
         const { error } = await db.from("rj_jobs").update(upd).eq("id", ex.id);
         if (error) throw new Error(error.message);
-        out.push({ url: u, ok: true, refreshed: true, slug: ex.slug, title: ex.title, pay_text: upd.pay_text, status: upd.status });
+        out.push({ url: u, ok: true, refreshed: true, slug: ex.slug, title: ex.title, pay_text: upd.pay_text, domain: ex.domain, tags: upd.tags, status: upd.status });
         continue;
       }
       let slug = slugify(g.title) || "role-" + id.slice(0, 8);
@@ -156,10 +217,12 @@ async function ingest(list: unknown, refresh: boolean) {
       const used = new Set((taken || []).map((r: any) => r.slug));
       for (let n = 2; used.has(slug); n++) slug = slugify(g.title) + "-" + n;
       const now = new Date().toISOString();
-      const row = { ...g, slug, threads: threads(g, slug, base), published_at: g.status === "live" ? now : null, updated_at: now };
+      await ensureDomain(g.domain);
+      const tags = await tagJob(x.skills, g.domain, g.scope.join(" ") + " " + g.title);
+      const row = { ...g, slug, tags, threads: threads(g, slug, base), published_at: g.status === "live" ? now : null, updated_at: now };
       const { error } = await db.from("rj_jobs").insert(row);
       if (error) throw new Error(error.message);
-      out.push({ url: u, ok: true, created: true, slug, title: g.title, pay_text: g.pay_text, domain: g.domain, status: g.status });
+      out.push({ url: u, ok: true, created: true, slug, title: g.title, pay_text: g.pay_text, domain: g.domain, tags, status: g.status });
     } catch (e) {
       out.push({ url: u, ok: false, error: String((e as Error).message || e).slice(0, 200) });
     }
@@ -264,6 +327,22 @@ async function admin(b: any, email: string) {
   }
   if (a === "alert_step") return await alertStep(Number(b.id) || 0, !!b.test, email);
   if (a === "ingest") return j(await ingest(b.urls, !!b.refresh));
+  if (a === "taxonomy") return j(await taxonomy(false));
+  if (a === "retag_all") return j(await retagAll());
+  if (a === "tax_rename") { const r = await renameSkill(b.from, b.to); return j(r, (r as any).error ? 400 : 200); }
+  if (a === "set_domain") {
+    const name = String(b.domain || "").trim().slice(0, 60);
+    if (!name) return j({ error: "Domain is required." }, 400);
+    await ensureDomain(name);
+    const { error } = await db.from("rj_jobs").update({ domain: name }).eq("id", Number(b.id) || 0);
+    return error ? j({ error: error.message }, 500) : j({ ok: true });
+  }
+  if (a === "set_tags") {
+    const tags = (Array.isArray(b.tags) ? b.tags : []).map((t: unknown) => String(t).trim().slice(0, 80)).filter(Boolean).slice(0, 6);
+    for (const t of tags) await db.from("rj_skills").upsert({ name: t }, { onConflict: "name", ignoreDuplicates: true });
+    const { error } = await db.from("rj_jobs").update({ tags }).eq("id", Number(b.id) || 0);
+    return error ? j({ error: error.message }, 500) : j({ ok: true, tags });
+  }
   if (a === "rethread") {
     const { data: jb } = await db.from("rj_jobs").select("*").eq("id", Number(b.id) || 0).maybeSingle();
     if (!jb) return j({ error: "Job not found." }, 404);
@@ -331,6 +410,7 @@ Deno.serve(async (req) => {
         if (!data) return j({ error: "not found" }, 404);
         return j({ job: data }, 200, "public, max-age=60");
       }
+      if (a === "taxonomy") return j(await taxonomy(true), 200, "public, max-age=60");
       return j({ ok: true, service: "rj" });
     }
     let b: any = {};
@@ -349,6 +429,7 @@ Deno.serve(async (req) => {
     if (b.action === "ingest_key") {
       const k = (await cfg()).ingest_key || "";
       if (k.length < 32 || String(b.key || "") !== k) return j({ error: "unauthorized" }, 401);
+      if (b.retag_all) return j(await retagAll());
       return j(await ingest(b.urls, !!b.refresh));
     }
     const email = String(b.email || "").trim().toLowerCase();

@@ -39,8 +39,8 @@ function render(j) {
   const body = `${BAR}
 <main class="wrap job" data-slug="${esc(j.slug)}" data-status="${esc(j.status)}" data-company="${esc(company)}">
   <article>
-    <p class="crumbs"><a href="/">Open roles</a> / ${esc(j.domain)}</p>
-    <div class="chips"><span class="chip dom">${esc(j.domain)}</span><span class="chip">${esc(j.job_type || 'Remote')}</span>${j.openings ? `<span class="chip">${esc(j.openings)}</span>` : ''}${closed ? '<span class="chip closed">Closed</span>' : ''}</div>
+    <p class="crumbs"><a href="/">Open roles</a> / <a href="/?d=${encodeURIComponent(j.domain)}">${esc(j.domain)}</a></p>
+    <div class="chips"><a class="chip dom" href="/?d=${encodeURIComponent(j.domain)}">${esc(j.domain)}</a><span class="chip">${esc(j.job_type || 'Remote')}</span>${j.openings ? `<span class="chip">${esc(j.openings)}</span>` : ''}${closed ? '<span class="chip closed">Closed</span>' : ''}</div>
     <h1>${esc(j.title)}</h1>
     ${j.about ? `<p class="lead-p">${esc(j.about)}</p>` : ''}
     <div class="facts">
@@ -50,7 +50,7 @@ function render(j) {
       <div><span>Openings</span><b>${esc(j.openings || '—')}</b></div>
     </div>
     ${(j.scope || []).length ? `<section class="sec"><h2>What you'll do</h2><ul>${li(j.scope)}</ul></section>` : ''}
-    ${(j.skills || []).length ? `<section class="sec"><h2>Skills they list</h2><div class="skills">${(j.skills || []).map((s) => `<span>${esc(s)}</span>`).join('')}</div></section>` : ''}
+    ${((j.tags && j.tags.length ? j.tags : (j.skills || []).slice(0, 4))).length ? `<section class="sec"><h2>Major skills</h2><div class="skills">${(j.tags && j.tags.length ? j.tags : (j.skills || []).slice(0, 4)).map((s) => `<a href="/?s=${encodeURIComponent(s)}">${esc(s)}</a>`).join('')}</div></section>` : ''}
     ${(j.preferred || []).length ? `<section class="sec"><h2>What they prefer</h2><ul>${li(j.preferred)}</ul></section>` : ''}
     ${(j.fit || []).length ? `<section class="sec fit"><h2>This fits you if…</h2><ul>${li(j.fit)}</ul></section>` : ''}
     ${j.take ? `<section class="sec"><div class="take"><p>${esc(j.take)}</p><small>Dijae's take</small></div></section>` : ''}

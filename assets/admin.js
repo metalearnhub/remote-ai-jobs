@@ -40,7 +40,7 @@
   // ---------- views ----------
   function tab(t) {
     $$('#tabs a').forEach((a) => a.classList.toggle('on', a.dataset.t === t));
-    ({ jobs: viewJobs, new: viewAdd, links: viewLinks, threads: viewThreads, leads: viewLeads, alerts: viewAlerts }[t] || viewJobs)();
+    ({ jobs: viewJobs, new: viewAdd, links: viewLinks, threads: viewThreads, cats: viewCats, leads: viewLeads, alerts: viewAlerts }[t] || viewJobs)();
   }
   window.addEventListener('hashchange', () => { const h = location.hash.slice(1); if (h.startsWith('edit-')) viewEdit(JOBS.find((x) => String(x.id) === h.slice(5))); else tab(h || 'jobs'); });
   async function refresh() { const d = await api({ action: 'jobs' }); JOBS = d.jobs || []; SITE = d.site || SITE; }
@@ -167,6 +167,32 @@
       $$('[data-cp]', pn).forEach((b) => b.onclick = () => copy(j.threads[+b.dataset.cp][b.dataset.f]));
       $$('[data-posted]', pn).forEach((b) => b.onclick = async () => { const i = +b.dataset.posted; j.threads[i].posted = j.threads[i].posted ? null : new Date().toISOString().slice(0, 10); b.textContent = j.threads[i].posted ? 'Posted ' + j.threads[i].posted : 'Mark posted'; await persist(); });
       $('[data-regen]', pn).onclick = async () => { if ((j.threads || []).some(isNew) && !confirm('Replace these 3 posts with freshly written ones?')) return; try { await api({ action: 'rethread', id: j.id }); toast('Posts rewritten'); viewThreads(); } catch (e) { toast(e.message); } };
+    });
+  }
+
+
+  async function viewCats() {
+    app.innerHTML = '<div class="adm"><p class="muted">Loading…</p></div>';
+    const [t] = await Promise.all([api({ action: 'taxonomy' }), refresh()]);
+    const used = t.skills.filter((x) => x.count), unused = t.skills.filter((x) => !x.count);
+    app.innerHTML = `<div class="adm"><div class="row between"><h1>Categories</h1><button class="btn ghost sm" id="retag">Re-categorize all jobs</button></div>
+      <p class="muted">Every job gets one domain and 2–4 major skills from this shared list. New links reuse what's here; a new skill or domain is only added when nothing matches. Rename a skill to an existing name to merge them.</p>
+      <div class="grid2"><div class="panel"><h2>Domains</h2><table class="t">${t.domains.map((d) => `<tr><td>${esc(d.name)}</td><td style="text-align:right">${d.count} job${d.count === 1 ? '' : 's'}</td></tr>`).join('')}</table></div>
+      <div class="panel"><h2>Major skills <span class="muted small">(${used.length} in use)</span></h2><table class="t">${[...used, ...unused].map((x) => `<tr><td><b>${esc(x.name)}</b>${x.aliases && x.aliases.length ? `<br><span class="muted small">also: ${esc(x.aliases.slice(0, 6).join(', '))}</span>` : ''}</td><td class="hm muted small">${esc(x.domain || '')}</td><td style="text-align:right;white-space:nowrap">${x.count} · <button class="btn ghost sm" data-ren="${esc(x.name)}">Rename / merge</button></td></tr>`).join('') || '<tr><td class="muted">No skills yet.</td></tr>'}</table></div></div>
+      <div class="panel"><h2>Jobs</h2><table class="t">${JOBS.map((j) => `<tr data-id="${j.id}"><td><b>${esc(j.title)}</b></td><td><select data-dom>${t.domains.map((d) => `<option ${d.name === j.domain ? 'selected' : ''}>${esc(d.name)}</option>`).join('')}<option value="__new">+ New domain…</option></select></td>
+        <td><input type="text" data-tags value="${esc((j.tags || []).join(', '))}" placeholder="Skill, Skill"></td><td><button class="btn ghost sm" data-save>Save</button></td></tr>`).join('')}</table></div></div>`;
+    $('#retag').onclick = async () => { if (!confirm('Re-run categorization for every job? Manual skill edits will be replaced.')) return; try { await api({ action: 'retag_all' }); toast('Done'); viewCats(); } catch (e) { toast(e.message); } };
+    $$('[data-ren]').forEach((b) => b.onclick = async () => {
+      const to = prompt(`Rename "${b.dataset.ren}" to (type an existing name to merge):`, b.dataset.ren); if (!to || to === b.dataset.ren) return;
+      try { const r = await api({ action: 'tax_rename', from: b.dataset.ren, to }); toast(r.merged ? 'Merged' : 'Renamed'); viewCats(); } catch (e) { toast(e.message); }
+    });
+    $$('tr[data-id]').forEach((tr) => {
+      const sel = $('[data-dom]', tr);
+      sel.onchange = () => { if (sel.value === '__new') { const n = prompt('New domain name:'); if (n) { const o = document.createElement('option'); o.textContent = n; o.selected = true; sel.insertBefore(o, sel.lastElementChild); } else sel.selectedIndex = 0; } };
+      $('[data-save]', tr).onclick = async () => {
+        const id = +tr.dataset.id;
+        try { await api({ action: 'set_domain', id, domain: sel.value }); await api({ action: 'set_tags', id, tags: $('[data-tags]', tr).value.split(',').map((x) => x.trim()).filter(Boolean) }); toast('Saved'); } catch (e) { toast(e.message); }
+      };
     });
   }
 
