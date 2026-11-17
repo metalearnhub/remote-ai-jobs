@@ -79,9 +79,9 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--a
 .take { border-left: 4px solid var(--accent); background: var(--surface); border-radius: 0 var(--r-m) var(--r-m) 0; padding: 18px 22px; }
 .take p { font: italic 1.2rem/1.55 var(--serif); margin: 0 0 8px; }
 .take small { color: var(--ink-2); font-weight: 600; }
-.prep ol { margin: 0; padding: 0; list-style: none; counter-reset: p; display: grid; gap: 10px; }
-.prep li { counter-increment: p; display: grid; grid-template-columns: 30px 1fr; gap: 10px; align-items: start; }
-.prep li::before { content: counter(p); width: 26px; height: 26px; border-radius: 50%; background: var(--sunk); display: grid; place-items: center; font-weight: 800; font-size: .82rem; }
+.sec.prep ol { margin: 0; padding: 0; list-style: none; counter-reset: p; display: grid; gap: 12px; }
+.sec.prep li { counter-increment: p; position: static; padding: 0; display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 12px; align-items: start; }
+.sec.prep li::before { content: counter(p); position: static; transform: none; width: 28px; height: 28px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); display: grid; place-items: center; font-weight: 800; font-size: .85rem; line-height: 1; margin-top: -2px; }
 details.faq { border-top: 1px solid var(--line); padding: 14px 0; }
 details.faq:last-of-type { border-bottom: 1px solid var(--line); }
 details.faq summary { cursor: pointer; font-weight: 700; list-style: none; display: flex; justify-content: space-between; gap: 12px; }
