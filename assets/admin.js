@@ -65,21 +65,45 @@
     app.innerHTML = `<div class="adm"><h1>Add jobs</h1>
       <div class="panel"><label class="f">Paste referral links <small>One per line, straight from "Refer and earn". Up to 8 at a time.</small>
       <textarea id="urls" class="big" style="min-height:150px" placeholder="https://jobs.micro1.ai/post/…?referralCode=…"></textarea></label>
-      <div class="row" style="margin-top:12px"><button class="btn primary" id="go">Create pages + Threads posts</button><label class="check small"><input type="checkbox" id="rf"> Refresh pay, openings and posts if a role already exists</label></div>
+      <div id="pre" class="small" style="margin-top:8px"></div>
+      <div class="row" style="margin-top:12px"><button class="btn primary" id="go">Create pages + Threads posts</button><label class="check small"><input type="checkbox" id="rf"> Rewrite posts even if nothing changed</label><label class="check small"><input type="checkbox" id="force"> Add anyway if the details match another page</label></div>
       <p class="muted small" style="margin-top:10px">For each link I read the public job post, write the page (what you'll do, who it fits, your take, prep), publish it, and write 3 Threads posts with a link comment.</p>
       <div id="res"></div></div></div>`;
+    const pid = (u) => (u.match(/jobs\.micro1\.ai\/post\/([0-9a-f-]{36})/i) || [])[1];
+    const precheck = () => {
+      const urls = $('#urls').value.split(/\s+/).map((x) => x.trim()).filter(Boolean);
+      const seen = {}, msgs = [];
+      urls.forEach((u) => {
+        const id = pid(u); if (!id) { msgs.push(`<span class="err" style="display:block">Not a micro1 job link: ${esc(u.slice(0, 80))}</span>`); return; }
+        if (seen[id]) msgs.push(`<span class="warn">⚠ Pasted twice: ${esc(u.slice(0, 70))}…</span>`); seen[id] = 1;
+        const hit = JOBS.find((j) => (j.referral_url || '').toLowerCase().includes(id.toLowerCase()));
+        if (hit) msgs.push(`<span class="warn">⚠ Already on your board: <b>${esc(hit.title)}</b> (${esc(hit.status)}). I'll check if the details changed; if not, nothing is added.</span>`);
+      });
+      $('#pre').innerHTML = msgs.join('<br>');
+    };
+    if (!JOBS.length) refresh().then(precheck).catch(() => {});
+    $('#urls').oninput = precheck;
     $('#go').onclick = async () => {
       const urls = $('#urls').value.split(/\s+/).map((x) => x.trim()).filter(Boolean);
       if (!urls.length) return toast('Paste at least one link');
       const b = $('#go'); b.disabled = true; b.textContent = 'Working…'; $('#res').innerHTML = '<p class="muted">Reading the job posts…</p>';
       try {
-        const d = await api({ action: 'ingest', urls, refresh: $('#rf').checked });
+        const d = await api({ action: 'ingest', urls, refresh: $('#rf').checked, force: $('#force').checked });
         SITE = d.site || SITE;
-        $('#res').innerHTML = `<table class="t" style="margin-top:14px">${d.results.map((r) => `<tr><td>${r.ok ? '✓' : '✕'}</td><td>${r.ok ? `<b>${esc(r.title)}</b><br><span class="muted small">${esc(r.pay_text || '')} ${r.created ? '· new page' : r.refreshed ? '· refreshed' : '· already live'}${r.status === 'closed' ? ' · closed on micro1' : ''}</span>` : `<span class="muted small">${esc(r.url)}</span><br><span class="err" style="display:block">${esc(r.error)}</span>`}</td>
-          <td style="text-align:right;white-space:nowrap">${r.ok ? `<a class="btn ghost sm" target="_blank" href="${esc(SITE + '/j/' + r.slug)}">Open</a> <button class="btn ghost sm" data-copy="${esc(SITE + '/j/' + r.slug)}">Copy link</button>` : ''}</td></tr>`).join('')}</table>
-          ${d.results.some((r) => r.ok) ? '<div class="row" style="margin-top:12px"><a class="btn primary sm" href="#threads">Go to Threads posts →</a></div>' : ''}`;
+        const nDup = d.results.filter((r) => r.duplicate).length, nNew = d.results.filter((r) => r.created).length, nUpd = d.results.filter((r) => r.updated).length;
+        const icon = (r) => (r.duplicate ? '<span class="warn" title="Duplicate">⚠</span>' : r.ok ? '✓' : '<span class="err">✕</span>');
+        const line = (r) => r.created ? `<b>${esc(r.title)}</b><br><span class="muted small">${esc(r.pay_text || '')} · new page${(r.tags || []).length ? ' · ' + esc(r.tags.join(', ')) : ''}${r.status === 'closed' ? ' · closed on micro1' : ''}</span>`
+          : r.updated ? `<b>${esc(r.title)}</b><br><span class="small"><b>Updated:</b> ${esc((r.changes || []).join('; '))}</span>`
+          : r.duplicate ? `${r.title ? `<b>${esc(r.title)}</b><br>` : ''}<span class="warn small" style="display:block">${esc(r.error)}</span>`
+          : `<span class="muted small">${esc(r.url)}</span><br><span class="err" style="display:block">${esc(r.error)}</span>`;
+        $('#res').innerHTML = `<div class="hint" style="margin-top:14px">${nNew} new · ${nUpd} updated · ${nDup} duplicate${nDup === 1 ? '' : 's'} skipped${d.results.length - nNew - nUpd - nDup ? ' · ' + (d.results.length - nNew - nUpd - nDup) + ' failed' : ''}</div>
+          <table class="t" style="margin-top:8px">${d.results.map((r) => `<tr class="${r.duplicate ? 'dup' : ''}"><td style="width:28px">${icon(r)}</td><td>${line(r)}</td>
+          <td style="text-align:right;white-space:nowrap">${r.slug ? `<a class="btn ghost sm" target="_blank" href="${esc(SITE + '/j/' + r.slug)}">Open</a> <button class="btn ghost sm" data-copy="${esc(SITE + '/j/' + r.slug)}">Copy link</button>` : ''}</td></tr>`).join('')}</table>
+          ${nNew || nUpd ? '<div class="row" style="margin-top:12px"><a class="btn primary sm" href="#threads">Go to Threads posts →</a></div>' : ''}`;
+        if (nDup) toast(nDup + ' duplicate' + (nDup === 1 ? '' : 's') + ' skipped');
+        refresh().catch(() => {});
         $$('[data-copy]').forEach((x) => x.onclick = () => copy(x.dataset.copy));
-        if (d.results.every((r) => r.ok)) $('#urls').value = '';
+        if (d.results.every((r) => r.ok || r.duplicate)) { $('#urls').value = ''; $('#pre').innerHTML = ''; }
       } catch (e) { $('#res').innerHTML = `<p class="err">${esc(e.message)}</p>`; }
       b.disabled = false; b.textContent = 'Create pages + Threads posts';
     };

@@ -187,31 +187,71 @@ async function fetchPost(id: string) {
   if (!x || !x.title) throw new Error("Couldn't read this job page (it may be closed or the layout changed).");
   return x;
 }
-async function ingest(list: unknown, refresh: boolean) {
+// Fingerprint of what the posting actually says (title, pay, full description), so a repeat link is caught
+// only when the link AND every detail match; a changed posting is reported as an update instead.
+async function fingerprint(g: any) {
+  const n = (v: unknown) => String(v ?? "").toLowerCase().replace(/\s+/g, " ").trim();
+  return await sha256([n(g.title), n(g.pay_text), n(g.openings), n(g.job_type), n(g.raw)].join("|"));
+}
+const refCode = (u: string) => (String(u).match(/[?&]referralCode=([^&#]+)/) || [])[1] || "";
+async function ingest(list: unknown, refresh: boolean, force = false) {
   const urls = (Array.isArray(list) ? list : String(list || "").split(/\s+/)).map((u) => String(u).trim()).filter(Boolean).slice(0, 8);
   const base = await site();
   const out: any[] = [];
+  const seenIds = new Set<string>();
   for (const u of urls) {
     const m = u.match(POST_RE);
     if (!m) { out.push({ url: u, ok: false, error: "Not a jobs.micro1.ai/post/… link." }); continue; }
     const id = m[1].toLowerCase();
     if (!/[?&]referralCode=/.test(u)) { out.push({ url: u, ok: false, error: "This link has no referralCode. Copy it from \"Refer and earn\"." }); continue; }
+    if (seenIds.has(id)) { out.push({ url: u, ok: false, duplicate: true, error: "Duplicate: you pasted this same link twice in this batch." }); continue; }
+    seenIds.add(id);
     try {
-      const { data: ex } = await db.from("rj_jobs").select("*").ilike("referral_url", `%${id}%`).maybeSingle();
+      const { data: ex } = await db.from("rj_jobs").select("*").or(`source_id.eq.${id},referral_url.ilike.*${id}*`).limit(1).maybeSingle();
       const x = await fetchPost(id);
       const g = build(x, u, base);
-      if (ex && !refresh) { out.push({ url: u, ok: true, existed: true, slug: ex.slug, title: ex.title, status: ex.status }); continue; }
+      const hash = await fingerprint(g);
+
       if (ex) {
-        // keep curated text; refresh the facts that change and the posts
-        const upd: any = { pay_text: g.pay_text || ex.pay_text, openings: g.openings, status: g.status === "closed" ? "closed" : ex.status, referral_url: u, updated_at: new Date().toISOString() };
+        // Same job post. Compare the link and every detail.
+        const changes: string[] = [];
+        const edited = ex.source_hash ? ex.source_hash !== hash : ((g.pay_text || "") !== (ex.pay_text || "") || (g.openings || "") !== (ex.openings || ""));
+        if (edited) {
+          if (ex.source_hash && g.title !== ex.title) changes.push(`title: "${ex.title}" → "${g.title}"`);
+          if ((g.pay_text || "") !== (ex.pay_text || "")) changes.push(`pay: ${ex.pay_text || "—"} → ${g.pay_text || "—"}`);
+          if ((g.openings || "") !== (ex.openings || "")) changes.push(`openings: ${ex.openings || "—"} → ${g.openings || "—"}`);
+          if (!changes.length) changes.push("job description was edited on micro1");
+        }
+        if (g.status === "closed" && ex.status !== "closed") changes.push("closed on micro1");
+        const sameLink = ex.referral_url === u || refCode(ex.referral_url || "") === refCode(u);
+        if (!changes.length && !refresh) {
+          if (!ex.source_hash || !ex.source_id) await db.from("rj_jobs").update({ source_id: id, source_hash: hash }).eq("id", ex.id);
+          const where = ex.status === "live" ? "already live" : ex.status === "closed" ? "already saved (closed)" : "already saved as a draft";
+          out.push({ url: u, ok: false, duplicate: true, slug: ex.slug, title: ex.title, pay_text: ex.pay_text, status: ex.status, error: sameLink
+            ? `Duplicate: same link and same job details as a page that's ${where}. Nothing was added.`
+            : `Duplicate job: same posting and details as a page that's ${where}, but with a different referral code than the one saved. Nothing was changed; the saved link is kept.` });
+          continue;
+        }
+        if (!sameLink) changes.push("this link's referral code differs from the saved one (saved link kept)");
+        // Details changed (or refresh asked): update the facts, keep the curated text, rewrite posts.
+        const upd: any = { pay_text: g.pay_text || ex.pay_text, openings: g.openings, status: g.status === "closed" ? "closed" : ex.status, source_id: id, source_hash: hash, updated_at: new Date().toISOString() };
+        if (ex.source_hash && g.title && g.title !== ex.title) upd.title = g.title;
         await ensureDomain(ex.domain);
         upd.tags = await tagJob(x.skills.length ? x.skills : ex.skills || [], ex.domain, (ex.scope || []).join(" ") + " " + ex.title);
-        upd.threads = threads({ ...ex, ...upd }, ex.slug, base);
+        upd.threads = threads({ ...ex, ...upd }, ex.slug, base).map((p: any, i: number) => ({ ...p, posted: (ex.threads || [])[i]?.posted || null }));
         const { error } = await db.from("rj_jobs").update(upd).eq("id", ex.id);
         if (error) throw new Error(error.message);
-        out.push({ url: u, ok: true, refreshed: true, slug: ex.slug, title: ex.title, pay_text: upd.pay_text, domain: ex.domain, tags: upd.tags, status: upd.status });
+        out.push({ url: u, ok: true, updated: true, changes: changes.length ? changes : ["no changes; posts rewritten"], slug: ex.slug, title: upd.title || ex.title, pay_text: upd.pay_text, domain: ex.domain, tags: upd.tags, status: upd.status });
         continue;
       }
+
+      // Different link, but the very same posting text as an existing page (micro1 sometimes reposts a job).
+      const { data: twin } = await db.from("rj_jobs").select("slug,title,pay_text,status").eq("source_hash", hash).limit(1).maybeSingle();
+      if (twin && !force) {
+        out.push({ url: u, ok: false, duplicate: true, slug: twin.slug, title: twin.title, pay_text: twin.pay_text, status: twin.status, error: "Duplicate: this is a different link, but the title, pay and full description are identical to an existing page. Nothing was added. Tick \"Add anyway\" if it's really a separate opening." });
+        continue;
+      }
+
       let slug = slugify(g.title) || "role-" + id.slice(0, 8);
       const { data: taken } = await db.from("rj_jobs").select("slug").like("slug", slug + "%");
       const used = new Set((taken || []).map((r: any) => r.slug));
@@ -219,15 +259,32 @@ async function ingest(list: unknown, refresh: boolean) {
       const now = new Date().toISOString();
       await ensureDomain(g.domain);
       const tags = await tagJob(x.skills, g.domain, g.scope.join(" ") + " " + g.title);
-      const row = { ...g, slug, tags, threads: threads(g, slug, base), published_at: g.status === "live" ? now : null, updated_at: now };
+      const row = { ...g, slug, tags, source_id: id, source_hash: hash, threads: threads(g, slug, base), published_at: g.status === "live" ? now : null, updated_at: now };
       const { error } = await db.from("rj_jobs").insert(row);
       if (error) throw new Error(error.message);
-      out.push({ url: u, ok: true, created: true, slug, title: g.title, pay_text: g.pay_text, domain: g.domain, tags, status: g.status });
+      out.push({ url: u, ok: true, created: true, slug, title: g.title, pay_text: g.pay_text, domain: g.domain, tags, status: g.status, similar: twin ? twin.slug : null });
     } catch (e) {
       out.push({ url: u, ok: false, error: String((e as Error).message || e).slice(0, 200) });
     }
   }
   return { results: out, site: base };
+}
+
+// Records the fingerprint of every saved job (no content changes), so future duplicates are caught exactly.
+async function hashAll() {
+  const { data: jobs } = await db.from("rj_jobs").select("id,referral_url").not("referral_url", "is", null);
+  const out: any[] = [];
+  for (const jb of jobs || []) {
+    const m = String(jb.referral_url).match(POST_RE);
+    if (!m) continue;
+    try {
+      const x = await fetchPost(m[1].toLowerCase());
+      const g = build(x, jb.referral_url, await site());
+      await db.from("rj_jobs").update({ source_id: m[1].toLowerCase(), source_hash: await fingerprint(g) }).eq("id", jb.id);
+      out.push({ id: jb.id, ok: true });
+    } catch (e) { out.push({ id: jb.id, ok: false, error: String(e).slice(0, 120) }); }
+  }
+  return { ok: true, jobs: out };
 }
 
 // ---------- admin ----------
@@ -326,7 +383,7 @@ async function admin(b: any, email: string) {
     return j({ id: data.id });
   }
   if (a === "alert_step") return await alertStep(Number(b.id) || 0, !!b.test, email);
-  if (a === "ingest") return j(await ingest(b.urls, !!b.refresh));
+  if (a === "ingest") return j(await ingest(b.urls, !!b.refresh, !!b.force));
   if (a === "taxonomy") return j(await taxonomy(false));
   if (a === "retag_all") return j(await retagAll());
   if (a === "tax_rename") { const r = await renameSkill(b.from, b.to); return j(r, (r as any).error ? 400 : 200); }
@@ -430,7 +487,8 @@ Deno.serve(async (req) => {
       const k = (await cfg()).ingest_key || "";
       if (k.length < 32 || String(b.key || "") !== k) return j({ error: "unauthorized" }, 401);
       if (b.retag_all) return j(await retagAll());
-      return j(await ingest(b.urls, !!b.refresh));
+      if (b.hash_all) return j(await hashAll());
+      return j(await ingest(b.urls, !!b.refresh, !!b.force));
     }
     const email = String(b.email || "").trim().toLowerCase();
     if (b.action === "code") return await sendCode(email);
