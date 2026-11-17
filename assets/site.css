@@ -33,7 +33,7 @@ p { margin: 0 0 .9em; }
 .bar { border-bottom: 1px solid var(--line); background: color-mix(in srgb, var(--paper) 90%, transparent); backdrop-filter: blur(8px); position: sticky; top: 0; z-index: 20; }
 .bar .wrap { display: flex; align-items: center; gap: 14px; height: 62px; }
 .logo { display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--ink); font-weight: 800; letter-spacing: -0.01em; }
-.logo i { width: 30px; height: 30px; border-radius: 9px; background: var(--accent); display: grid; place-items: center; color: var(--accent-ink); font-style: normal; font-size: .82rem; font-weight: 800; }
+.logo img { width: 34px; height: 34px; flex: none; display: block; }
 .logo small { display: block; font-weight: 500; color: var(--ink-2); font-size: .74rem; letter-spacing: 0; }
 .bar nav { margin-left: auto; display: flex; gap: 18px; font-size: .92rem; }
 .bar nav a { color: var(--ink-2); text-decoration: none; font-weight: 600; }

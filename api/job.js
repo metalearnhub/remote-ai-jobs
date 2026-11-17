@@ -14,7 +14,7 @@ function shell({ title, desc, url, body, robots = 'index,follow', jsonld = '' })
 <body>${body}</body></html>`;
 }
 
-const BAR = `<header class="bar"><div class="wrap"><a class="logo" href="/"><i>AI</i><span>Remote AI Work<small>curated by Dijae Dadula</small></span></a>
+const BAR = `<header class="bar"><div class="wrap"><a class="logo" href="/"><img src="/assets/icon.svg" alt="" width="34" height="34"><span>Remote AI Work<small>curated by Dijae Dadula</small></span></a>
 <nav><a href="/">Open roles</a><a class="hide-m" href="/guide">Free guide</a><a class="hide-m" href="/privacy">Disclosure</a></nav></div></header>`;
 const FOOT = `<footer class="foot"><div class="wrap">Independent job page by Dijae Dadula. Not affiliated with, sponsored by or endorsed by micro1 or any employer. Some links are referral links, and I may earn a referral bonus if you're hired. Pay, openings and requirements are as posted and can change; nothing here guarantees an interview, placement or pay. <a href="/privacy">Privacy & disclosure</a> · <a href="/guide">Free guide</a></div></footer>`;
 

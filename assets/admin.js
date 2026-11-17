@@ -1,4 +1,4 @@
-// Remote AI Work admin: sign in (emailed code), add jobs from pasted text, links list, Threads drafts, leads, alerts.
+// Remote AI Work admin: sign in (emailed code), add jobs from referral links, links list, Threads posts, leads, alerts.
 (function () {
   const FN = window.RJ_FN, D = window.RJ_DOMAINS;
   const app = document.getElementById('app');
@@ -37,78 +37,10 @@
     };
   }
 
-  // ---------- parser: micro1-style job text → fields ----------
-  const HEAD = {
-    about: /^(about the role|the role|role overview|overview|about)\b/i,
-    scope: /^(scope of work|what you'?ll do|responsibilities|key responsibilities|what you will do|your role)\b/i,
-    preferred: /^(preferred qualifications|what we'?re looking for|requirements|qualifications|who you are|strong plus|nice to have|minimum qualifications)\b/i,
-    skills: /^required skills\b/i,
-    stop: /^(job description|refer and earn|apply now|the national pay range|micro1 is an equal|our hiring process|benefits|compensation)\b/i,
-  };
-  function parse(raw) {
-    const t = String(raw || '').replace(/\r/g, '');
-    const L = t.split('\n').map((x) => x.trim());
-    const out = { title: '', pay_text: '', openings: '', job_type: 'Contract · Remote', about: '', scope: [], preferred: [], skills: [] };
-    const rt = t.match(/Role Title:\s*(.+)/i) || t.match(/Job Title:\s*(.+)/i);
-    out.title = rt ? rt[1].trim() : (L.find((x) => x && !/^(posted|high demand|new|experts|company|opportunities|product|your referral)/i.test(x)) || '');
-    const pay = t.match(/\$\s?[\d,.]+[kK]?\s*[-–to]+\s*\$\s?[\d,.]+[kK]?\s*\/\s*(hour|hr|year|yr|month|mo)\b/i) || t.match(/\$\s?[\d,.]+[kK]?\s*\/\s*(hour|hr)\b/i);
-    if (pay) out.pay_text = pay[0].replace(/\s+/g, ' ').replace(/\s*-\s*/, '–').replace(/\/\s*hour/i, '/hr').replace(/\/\s*year/i, '/yr');
-    const op = t.match(/(\d[\d,]*)\s+openings?/i); if (op) out.openings = `${op[1]} opening${op[1] === '1' ? '' : 's'}`;
-    const ty = t.match(/Role Type:\s*(.+)/i) || t.match(/Job Type:\s*(.+)/i); const lo = t.match(/Location:\s*(.+)/i);
-    if (ty || lo) out.job_type = [ty && ty[1].trim(), lo && lo[1].trim()].filter(Boolean).join(' · ');
-    let cur = null;
-    const seen = new Set();
-    for (const raw2 of L) {
-      const x = raw2.replace(/\s+/g, ' ');
-      if (!x) continue;
-      if (HEAD.stop.test(x)) { cur = null; continue; }
-      let hit = null;
-      for (const k of ['skills', 'about', 'scope', 'preferred']) if (HEAD[k].test(x)) { hit = k; break; }
-      if (hit) {
-        cur = hit;
-        const rest = x.replace(HEAD[hit], '').replace(/^[:\s]+/, '');
-        if (rest && hit === 'about') out.about += rest + ' ';
-        continue;
-      }
-      if (/^(role title|role type|location|job title|job type|posted|pay:?|\$|\d+ openings?|\+\d+$)/i.test(x)) continue;
-      if (!cur) continue;
-      if (cur === 'about') out.about += x + ' ';
-      else if (cur === 'skills') { if (x.length < 60 && !seen.has('s' + x)) { seen.add('s' + x); out.skills.push(x); } }
-      else if (!seen.has(cur + x)) { seen.add(cur + x); out[cur].push(x.replace(/^[-•*·]\s*/, '')); }
-    }
-    out.about = out.about.trim().replace(/^micro1 is partnering with a leading AI lab to hire /i, 'A leading AI lab, through micro1, is hiring ');
-    out.domain = window.RJ_DETECT(out.title + ' ' + out.skills.join(' ') + ' ' + out.scope.join(' '));
-    return out;
-  }
-  function autoFill(j) {
-    const d = D[j.domain] || D['General AI training'];
-    if (!j.fit || !j.fit.length) j.fit = d.fit.slice();
-    if (!j.prep || !j.prep.length) j.prep = d.prep.slice();
-    if (!j.take) j.take = `If you've done this work for real, this is one of the better-paid ways to use it remotely. Apply only if you can walk through your own examples in depth: the AI interview keeps asking "how" until it finds the edge of what you know.`;
-    return j;
-  }
-
-  // ---------- Threads drafts (≤ 500 chars, always disclosed) ----------
-  function threads(j, ch = 'threads') {
-    const d = D[j.domain] || D['General AI training'];
-    const url = `${SITE}/j/${j.slug}?ref=${ch}`;
-    const pay = j.pay_text ? `${j.pay_text} (as posted)` : 'pay as posted';
-    const disc = '(Referral partner: I may earn a bonus if you\'re hired.)';
-    const s0 = (j.scope && j.scope[0]) ? j.scope[0].replace(/\.$/, '') : d.verb;
-    const lc = (s) => s.charAt(0).toLowerCase() + s.slice(1);
-    const fit = (j.fit && j.fit.length ? j.fit : d.fit).slice(0, 3);
-    const posts = [
-      `${j.title}, fully remote. ${pay}.\n\nThe work: ${lc(s0)}.\n\nBuilt for ${d.who} who've done this for real, not people "getting into AI".\n\nDetails, plain-English breakdown and how to apply:\n${url}\n${disc}`,
-      `${d.who.charAt(0).toUpperCase() + d.who.slice(1)}: AI labs are paying experts to ${d.verb}.\n\nThis one: ${j.title} · ${pay}.\n\nQuick test before you apply: could you talk for 20 minutes about real work you've done in this area? If yes, it's worth a look.\n\n${url}\n${disc}`,
-      `3 signs this remote AI role fits you:\n\n1. ${fit[0]}\n2. ${fit[1] || ''}\n3. ${fit[2] || ''}\n\n${j.title} · ${pay}\n${url}\n${disc}`,
-    ];
-    return posts.map((t) => t.replace(/\n{3,}/g, '\n\n')).map((t) => (t.length > 500 ? t.slice(0, 497) + '…' : t)).map((text) => ({ text, posted: null }));
-  }
-
   // ---------- views ----------
   function tab(t) {
     $$('#tabs a').forEach((a) => a.classList.toggle('on', a.dataset.t === t));
-    ({ jobs: viewJobs, new: () => viewEdit(null), links: viewLinks, threads: viewThreads, leads: viewLeads, alerts: viewAlerts }[t] || viewJobs)();
+    ({ jobs: viewJobs, new: viewAdd, links: viewLinks, threads: viewThreads, leads: viewLeads, alerts: viewAlerts }[t] || viewJobs)();
   }
   window.addEventListener('hashchange', () => { const h = location.hash.slice(1); if (h.startsWith('edit-')) viewEdit(JOBS.find((x) => String(x.id) === h.slice(5))); else tab(h || 'jobs'); });
   async function refresh() { const d = await api({ action: 'jobs' }); JOBS = d.jobs || []; SITE = d.site || SITE; }
@@ -121,24 +53,46 @@
     const v = JOBS.reduce((n, j) => n + j.views, 0), a = JOBS.reduce((n, j) => n + j.applies, 0);
     app.innerHTML = `<div class="adm"><div class="row between"><h1>Jobs</h1><a class="btn primary sm" href="#new">+ Add job</a></div>
       <div class="stats"><div><b>${live.length}</b><span>live pages</span></div><div><b>${v}</b><span>page views</span></div><div><b>${a}</b><span>apply clicks</span></div><div><b>${v ? Math.round(a / v * 100) : 0}%</b><span>view → apply</span></div></div>
-      <div class="hint">Daily routine (≈2 min): open your referral dashboard yourself, pick 1–3 roles, click "Refer and earn", then paste the link and the job text into <a href="#new">Add job</a>. Automated tools on the referral site aren't allowed by its terms, so this step stays manual.</div>
+      <div class="hint">Daily routine (≈1 min): in your referral dashboard, click "Refer and earn" on 1–3 roles, copy the links, and paste them into <a href="#new">Add job</a>. Everything else is written for you. (The dashboard itself stays manual: its terms don't allow automated tools.)</div>
       <div class="panel" style="margin-top:14px;overflow-x:auto">${JOBS.length ? `<table class="t"><tr><th>Role</th><th class="hm">Domain</th><th>Status</th><th>Views</th><th>Applies</th><th></th></tr>
       ${JOBS.map((j) => `<tr><td><b>${esc(j.title)}</b><br><span class="muted small">${esc(j.pay_text || '')}</span></td><td class="hm">${esc(j.domain)}</td><td><span class="pill ${j.status}">${j.status}</span></td><td>${j.views}</td><td>${j.applies}</td>
       <td class="row" style="justify-content:flex-end"><button class="btn ghost sm" data-copy="${esc(pageUrl(j))}">Copy link</button>${j.status !== 'draft' ? `<a class="btn ghost sm" target="_blank" href="${esc(pageUrl(j))}">Open</a>` : ''}<a class="btn ghost sm" href="#edit-${j.id}">Edit</a></td></tr>`).join('')}</table>` : '<p class="muted">No jobs yet. <a href="#new">Add your first one</a>.</p>'}</div></div>`;
     $$('[data-copy]').forEach((b) => b.onclick = () => copy(b.dataset.copy));
   }
 
+
+  function viewAdd() {
+    app.innerHTML = `<div class="adm"><h1>Add jobs</h1>
+      <div class="panel"><label class="f">Paste referral links <small>One per line, straight from "Refer and earn". Up to 8 at a time.</small>
+      <textarea id="urls" class="big" style="min-height:150px" placeholder="https://jobs.micro1.ai/post/…?referralCode=…"></textarea></label>
+      <div class="row" style="margin-top:12px"><button class="btn primary" id="go">Create pages + Threads posts</button><label class="check small"><input type="checkbox" id="rf"> Refresh pay, openings and posts if a role already exists</label></div>
+      <p class="muted small" style="margin-top:10px">For each link I read the public job post, write the page (what you'll do, who it fits, your take, prep), publish it, and write 3 Threads posts with a link comment.</p>
+      <div id="res"></div></div></div>`;
+    $('#go').onclick = async () => {
+      const urls = $('#urls').value.split(/\s+/).map((x) => x.trim()).filter(Boolean);
+      if (!urls.length) return toast('Paste at least one link');
+      const b = $('#go'); b.disabled = true; b.textContent = 'Working…'; $('#res').innerHTML = '<p class="muted">Reading the job posts…</p>';
+      try {
+        const d = await api({ action: 'ingest', urls, refresh: $('#rf').checked });
+        SITE = d.site || SITE;
+        $('#res').innerHTML = `<table class="t" style="margin-top:14px">${d.results.map((r) => `<tr><td>${r.ok ? '✓' : '✕'}</td><td>${r.ok ? `<b>${esc(r.title)}</b><br><span class="muted small">${esc(r.pay_text || '')} ${r.created ? '· new page' : r.refreshed ? '· refreshed' : '· already live'}${r.status === 'closed' ? ' · closed on micro1' : ''}</span>` : `<span class="muted small">${esc(r.url)}</span><br><span class="err" style="display:block">${esc(r.error)}</span>`}</td>
+          <td style="text-align:right;white-space:nowrap">${r.ok ? `<a class="btn ghost sm" target="_blank" href="${esc(SITE + '/j/' + r.slug)}">Open</a> <button class="btn ghost sm" data-copy="${esc(SITE + '/j/' + r.slug)}">Copy link</button>` : ''}</td></tr>`).join('')}</table>
+          ${d.results.some((r) => r.ok) ? '<div class="row" style="margin-top:12px"><a class="btn primary sm" href="#threads">Go to Threads posts →</a></div>' : ''}`;
+        $$('[data-copy]').forEach((x) => x.onclick = () => copy(x.dataset.copy));
+        if (d.results.every((r) => r.ok)) $('#urls').value = '';
+      } catch (e) { $('#res').innerHTML = `<p class="err">${esc(e.message)}</p>`; }
+      b.disabled = false; b.textContent = 'Create pages + Threads posts';
+    };
+  }
+
   function viewEdit(job) {
     const j = job ? JSON.parse(JSON.stringify(job)) : { status: 'draft', company: 'micro1', skills: [], scope: [], preferred: [], fit: [], prep: [], threads: [] };
     app.innerHTML = `<div class="adm"><h1>${job ? 'Edit job' : 'Add a job'}</h1>
-      <div class="panel"><h2>1 · Paste from your referral dashboard</h2>
-        <label class="f">Your referral link for this role <small>From "Refer and earn" on the role</small><input type="url" id="ref" placeholder="https://…" value="${esc(j.referral_url || '')}"></label>
-        <label class="f" style="margin-top:12px">Full job text <small>Select everything on the role page and paste it here</small><textarea class="big" id="raw" placeholder="Junior Software Engineer&#10;Posted by micro1&#10;100 openings&#10;$150 - $200/hr&#10;Required Skills …">${esc(j.raw || '')}</textarea></label>
-        <div class="row" style="margin-top:12px"><button class="btn primary sm" id="parse">Build the page from this text</button><span class="muted small">You can edit everything below.</span></div></div>
+      <div class="panel"><label class="f">Your referral link for this role<input type="url" id="ref" placeholder="https://…" value="${esc(j.referral_url || '')}"></label><textarea id="raw" hidden>${esc(j.raw || '')}</textarea></div>
       <div class="panel" id="fields"></div></div>`;
     function fields() {
       const doms = Object.keys(D);
-      $('#fields').innerHTML = `<h2>2 · Check the page</h2>
+      $('#fields').innerHTML = `<h2>Page content</h2>
         <div class="grid2"><label class="f">Role title<input type="text" id="f_title" value="${esc(j.title || '')}"></label>
         <label class="f">Page address <small>${esc(SITE)}/j/…</small><input type="text" id="f_slug" value="${esc(j.slug || '')}"></label></div>
         <div class="grid3" style="margin-top:12px"><label class="f">Domain<select id="f_domain">${doms.map((d) => `<option ${d === j.domain ? 'selected' : ''}>${esc(d)}</option>`).join('')}</select></label>
@@ -166,7 +120,6 @@
       const save = async (status) => {
         const e = $('#ferr'); e.hidden = true;
         const o = collect(status);
-        if (!o.threads.length || !j.id) o.threads = threads(o);
         try { const d = await api({ action: 'save', job: o }); j = d.job; toast(status === 'live' ? 'Published' : status === 'closed' ? 'Marked closed' : 'Draft saved'); location.hash = status === 'live' ? 'threads' : 'jobs'; }
         catch (x) { e.textContent = x.message; e.hidden = false; }
       };
@@ -175,15 +128,6 @@
       if ($('#close')) $('#close').onclick = () => save('closed');
       if ($('#del')) $('#del').onclick = async () => { if (!confirm('Delete this job page permanently?')) return; await api({ action: 'delete', id: j.id }); toast('Deleted'); location.hash = 'jobs'; };
     }
-    $('#parse').onclick = () => {
-      const p = parse($('#raw').value);
-      if (!p.title) { toast('Couldn\'t find a title. Fill the fields by hand.'); }
-      Object.assign(j, p, { referral_url: $('#ref').value.trim() });
-      j.slug = j.id ? j.slug : slugify(p.title);
-      if (!j.id && JOBS.some((x) => x.slug === j.slug)) j.slug = slugify(p.title + '-' + new Date().toISOString().slice(5, 10));
-      j.fit = []; j.prep = []; j.take = j.take || '';
-      autoFill(j); fields(); toast('Page built. Check it, then publish.');
-    };
     if (!j.domain) j.domain = 'General AI training';
     fields();
   }
@@ -207,18 +151,22 @@
   async function viewThreads() {
     await refresh();
     const live = JOBS.filter((j) => j.status === 'live');
-    app.innerHTML = `<div class="adm"><h1>Threads drafts</h1><p class="muted">3 drafts per live role, each under Threads' 500-character limit and disclosed as a referral link. Post 1–2 a week per role; consistency beats volume.</p>
-      ${live.length ? live.map((j) => `<div class="panel" data-id="${j.id}"><div class="row between"><div><b>${esc(j.title)}</b> <span class="muted small">· ${esc(j.domain)}</span></div><button class="btn ghost sm" data-regen>Regenerate</button></div>
-      <div class="grid3" style="margin-top:12px">${(j.threads && j.threads.length ? j.threads : threads(j)).map((p, i) => `<div class="post"><textarea data-i="${i}">${esc(p.text)}</textarea>
-      <div class="row between"><span class="count">${p.text.length}/500</span><span class="row"><button class="btn ghost sm" data-posted="${i}">${p.posted ? 'Posted ' + esc(p.posted) : 'Mark posted'}</button><button class="btn primary sm" data-cp="${i}">Copy</button></span></div></div>`).join('')}</div></div>`).join('') : '<div class="panel muted">Publish a job to get drafts.</div>'}</div>`;
+    const isNew = (p) => p && typeof p.comment === 'string';
+    app.innerHTML = `<div class="adm"><h1>Threads posts</h1><p class="muted">Each role has 3 posts. Post the main text, then reply to your own post with the comment (it has the link and the referral disclosure). Pick the topic shown. Space them out: 1–2 posts a week per role.</p>
+      ${live.length ? live.map((j) => `<div class="panel" data-id="${j.id}"><div class="row between"><div><b>${esc(j.title)}</b> <span class="muted small">· ${esc(j.pay_text || '')} · ${esc(j.domain)}</span></div><span class="row"><a class="btn ghost sm" target="_blank" href="${esc(pageUrl(j))}">Page</a><button class="btn ghost sm" data-regen>Rewrite posts</button></span></div>
+      ${(j.threads || []).every(isNew) && (j.threads || []).length ? `<div class="grid3" style="margin-top:12px">${j.threads.map((p, i) => `<div class="post">
+        <div class="row between"><b class="small">${esc(p.angle || 'Post ' + (i + 1))}</b><span class="pill">Topic: ${esc(p.tag || 'Remote Jobs')}</span></div>
+        <label class="small muted">1 · Post</label><textarea data-i="${i}" data-f="text">${esc(p.text)}</textarea>
+        <div class="row between"><span class="count">${p.text.length}/500</span><button class="btn primary sm" data-cp="${i}" data-f="text">Copy post</button></div>
+        <label class="small muted">2 · Reply to your post with</label><textarea class="cm" data-i="${i}" data-f="comment">${esc(p.comment)}</textarea>
+        <div class="row between"><button class="btn ghost sm" data-posted="${i}">${p.posted ? 'Posted ' + esc(p.posted) : 'Mark posted'}</button><button class="btn primary sm" data-cp="${i}" data-f="comment">Copy comment</button></div></div>`).join('')}</div>` : '<p class="muted small" style="margin-top:10px">Old-format drafts. Click "Rewrite posts".</p>'}</div>`).join('') : '<div class="panel muted">Add a job to get posts.</div>'}</div>`;
     $$('.panel[data-id]').forEach((pn) => {
       const j = JOBS.find((x) => String(x.id) === pn.dataset.id);
-      if (!j.threads || !j.threads.length) j.threads = threads(j);
       const persist = async () => { try { await api({ action: 'save', job: Object.assign({}, j) }); } catch (e) { toast(e.message); } };
-      $$('textarea', pn).forEach((ta) => ta.oninput = () => { const i = +ta.dataset.i; j.threads[i].text = ta.value; const c = ta.parentElement.querySelector('.count'); c.textContent = ta.value.length + '/500'; c.classList.toggle('over', ta.value.length > 500); clearTimeout(ta._t); ta._t = setTimeout(persist, 800); });
-      $$('[data-cp]', pn).forEach((b) => b.onclick = () => copy(j.threads[+b.dataset.cp].text));
-      $$('[data-posted]', pn).forEach((b) => b.onclick = async () => { const i = +b.dataset.posted; j.threads[i].posted = new Date().toISOString().slice(0, 10); b.textContent = 'Posted ' + j.threads[i].posted; await persist(); });
-      $('[data-regen]', pn).onclick = async () => { j.threads = threads(j); await persist(); viewThreads(); };
+      $$('textarea', pn).forEach((ta) => ta.oninput = () => { const i = +ta.dataset.i; j.threads[i][ta.dataset.f] = ta.value; if (ta.dataset.f === 'text') { const c = ta.parentElement.querySelector('.count'); c.textContent = ta.value.length + '/500'; c.classList.toggle('over', ta.value.length > 500); } clearTimeout(ta._t); ta._t = setTimeout(persist, 800); });
+      $$('[data-cp]', pn).forEach((b) => b.onclick = () => copy(j.threads[+b.dataset.cp][b.dataset.f]));
+      $$('[data-posted]', pn).forEach((b) => b.onclick = async () => { const i = +b.dataset.posted; j.threads[i].posted = j.threads[i].posted ? null : new Date().toISOString().slice(0, 10); b.textContent = j.threads[i].posted ? 'Posted ' + j.threads[i].posted : 'Mark posted'; await persist(); });
+      $('[data-regen]', pn).onclick = async () => { if ((j.threads || []).some(isNew) && !confirm('Replace these 3 posts with freshly written ones?')) return; try { await api({ action: 'rethread', id: j.id }); toast('Posts rewritten'); viewThreads(); } catch (e) { toast(e.message); } };
     });
   }
 
@@ -264,6 +212,6 @@
     $('#tabs').hidden = false;
     const h = location.hash.slice(1); if (h.startsWith('edit-')) { await refresh(); viewEdit(JOBS.find((x) => String(x.id) === h.slice(5))); } else tab(h || 'jobs');
   }
-  window.RJ_PARSE = parse; window.RJ_THREADS = threads;
+  
   if (TOKEN) start(); else login();
 })();

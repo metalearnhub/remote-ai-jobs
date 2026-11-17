@@ -3,6 +3,7 @@
 // Referral URLs are only returned after a visitor has given an email (capture) or carries a valid lead token (go).
 import { createClient } from "npm:@supabase/supabase-js@2.45.4";
 import nodemailer from "npm:nodemailer@6.9.16";
+import { POST_RE, extract, build, threads, slugify } from "./gen.js";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -119,6 +120,53 @@ async function go(b: any) {
   return j({ ok: true, url: job.referral_url });
 }
 
+// ---------- link → page (one public job page per link, only when Dijae submits it) ----------
+async function fetchPost(id: string) {
+  const r = await fetch(`https://jobs.micro1.ai/post/${id}`, { headers: { "User-Agent": "Mozilla/5.0 (compatible; RemoteAIWork/1.0; +https://jobs.dijaedadula.com)", "Accept": "text/html" }, redirect: "follow" });
+  if (!r.ok) throw new Error(`The job page answered ${r.status}.`);
+  const x = extract(await r.text());
+  if (!x || !x.title) throw new Error("Couldn't read this job page (it may be closed or the layout changed).");
+  return x;
+}
+async function ingest(list: unknown, refresh: boolean) {
+  const urls = (Array.isArray(list) ? list : String(list || "").split(/\s+/)).map((u) => String(u).trim()).filter(Boolean).slice(0, 8);
+  const base = await site();
+  const out: any[] = [];
+  for (const u of urls) {
+    const m = u.match(POST_RE);
+    if (!m) { out.push({ url: u, ok: false, error: "Not a jobs.micro1.ai/post/… link." }); continue; }
+    const id = m[1].toLowerCase();
+    if (!/[?&]referralCode=/.test(u)) { out.push({ url: u, ok: false, error: "This link has no referralCode. Copy it from \"Refer and earn\"." }); continue; }
+    try {
+      const { data: ex } = await db.from("rj_jobs").select("*").ilike("referral_url", `%${id}%`).maybeSingle();
+      const x = await fetchPost(id);
+      const g = build(x, u, base);
+      if (ex && !refresh) { out.push({ url: u, ok: true, existed: true, slug: ex.slug, title: ex.title, status: ex.status }); continue; }
+      if (ex) {
+        // keep curated text; refresh the facts that change and the posts
+        const upd: any = { pay_text: g.pay_text || ex.pay_text, openings: g.openings, status: g.status === "closed" ? "closed" : ex.status, referral_url: u, updated_at: new Date().toISOString() };
+        upd.threads = threads({ ...ex, ...upd }, ex.slug, base);
+        const { error } = await db.from("rj_jobs").update(upd).eq("id", ex.id);
+        if (error) throw new Error(error.message);
+        out.push({ url: u, ok: true, refreshed: true, slug: ex.slug, title: ex.title, pay_text: upd.pay_text, status: upd.status });
+        continue;
+      }
+      let slug = slugify(g.title) || "role-" + id.slice(0, 8);
+      const { data: taken } = await db.from("rj_jobs").select("slug").like("slug", slug + "%");
+      const used = new Set((taken || []).map((r: any) => r.slug));
+      for (let n = 2; used.has(slug); n++) slug = slugify(g.title) + "-" + n;
+      const now = new Date().toISOString();
+      const row = { ...g, slug, threads: threads(g, slug, base), published_at: g.status === "live" ? now : null, updated_at: now };
+      const { error } = await db.from("rj_jobs").insert(row);
+      if (error) throw new Error(error.message);
+      out.push({ url: u, ok: true, created: true, slug, title: g.title, pay_text: g.pay_text, domain: g.domain, status: g.status });
+    } catch (e) {
+      out.push({ url: u, ok: false, error: String((e as Error).message || e).slice(0, 200) });
+    }
+  }
+  return { results: out, site: base };
+}
+
 // ---------- admin ----------
 async function mailCode(to: string, code: string) {
   const t = transport(); if (!t) return false;
@@ -215,6 +263,15 @@ async function admin(b: any, email: string) {
     return j({ id: data.id });
   }
   if (a === "alert_step") return await alertStep(Number(b.id) || 0, !!b.test, email);
+  if (a === "ingest") return j(await ingest(b.urls, !!b.refresh));
+  if (a === "rethread") {
+    const { data: jb } = await db.from("rj_jobs").select("*").eq("id", Number(b.id) || 0).maybeSingle();
+    if (!jb) return j({ error: "Job not found." }, 404);
+    const t = threads(jb, jb.slug, await site());
+    const { data, error } = await db.from("rj_jobs").update({ threads: t, updated_at: new Date().toISOString() }).eq("id", jb.id).select("*").single();
+    if (error) return j({ error: error.message }, 500);
+    return j({ job: data });
+  }
   return j({ error: "unknown action" }, 400);
 }
 
@@ -288,6 +345,11 @@ Deno.serve(async (req) => {
         if (jb) await db.from("rj_jobs").update({ views: jb.views + 1 }).eq("id", jb.id);
       }
       return j({ ok: true });
+    }
+    if (b.action === "ingest_key") {
+      const k = (await cfg()).ingest_key || "";
+      if (k.length < 32 || String(b.key || "") !== k) return j({ error: "unauthorized" }, 401);
+      return j(await ingest(b.urls, !!b.refresh));
     }
     const email = String(b.email || "").trim().toLowerCase();
     if (b.action === "code") return await sendCode(email);
