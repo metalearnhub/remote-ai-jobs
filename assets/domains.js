@@ -1,16 +1,16 @@
 // Domain profiles: detection keywords, audience wording, fit lines, prep steps and post angles.
 window.RJ_DOMAINS = {
   'Software engineering': {
-    kw: ['software', 'engineer', 'developer', 'code review', 'debugging', 'system design', 'algorithms', 'backend', 'frontend', 'full stack', 'devops', 'swe'],
+    kw: ['software', 'software engineer', 'developer', 'code review', 'debugging', 'system design', 'algorithms', 'backend', 'frontend', 'full stack', 'devops', 'swe', 'web app', 'api'],
     who: 'software engineers', verb: 'review AI-written code and design hard coding problems',
     fit: ['You write and review production code regularly, not just tutorials', 'You can explain why a design or fix is right, in writing', 'You enjoy finding the bug others miss'],
     prep: ['Pick 2 real systems you built or debugged and write down the trade-offs you made', 'Practise explaining one algorithm and one design decision out loud in under 2 minutes', 'Expect a live coding task: warm up on 3–5 medium problems in your main language'],
     tag: 'SoftwareEngineering',
   },
   'Data science & ML': {
-    kw: ['data scien', 'machine learning', 'statistic', 'pandas', 'experimentation', 'data model', 'quantitative', ' ml ', 'analytics'],
+    kw: ['data scien', 'machine learning', 'statistic', 'pandas', 'experimentation', 'data model', 'quantitative', 'ml', 'analytics', 'kaggle', 'deep learning', 'signal processing', 'time-series', 'time series', 'model training', 'llm'],
     who: 'data scientists and quants', verb: 'spot flawed methods and weak statistical reasoning in AI answers',
-    fit: ['You run analyses or experiments as part of your actual job', 'You can spot a bad baseline, leakage or p-hacking quickly', 'You can explain statistics clearly to non-experts'],
+    fit: ['You build or evaluate ML models or analyses as part of your actual job', 'You can spot a bad baseline, data leakage or a misleading metric quickly', 'You can explain your modeling choices clearly in writing'],
     prep: ['Prepare one experiment you designed: hypothesis, metric, sample, result', 'Review common pitfalls: leakage, Simpson\'s paradox, multiple testing', 'Be ready to explain a model choice and how you validated it'],
     tag: 'DataScience',
   },
@@ -22,7 +22,7 @@ window.RJ_DOMAINS = {
     tag: 'ProductManagement',
   },
   'Marketing & sales': {
-    kw: ['marketing', 'sales', 'brand', 'growth', 'crm', 'gtm', 'copywrit', 'campaign', 'seo', 'presentation', 'slide'],
+    kw: ['marketing', 'sales', 'brand', 'growth', 'crm', 'gtm', 'copywrit', 'campaign', 'seo', 'presentation', 'partnerships', 'referral partner'],
     who: 'marketers and sales pros', verb: 'judge AI-written campaigns, decks and sales workflows',
     fit: ['You\'ve run real campaigns, funnels or sales processes with numbers to show', 'You can explain why one message works better for a specific audience', 'You know your tools (CRM, ads, analytics) hands-on'],
     prep: ['Pick 2 campaigns or pipelines you ran and the metrics that moved', 'Practise critiquing a landing page or deck in 60 seconds: audience, message, proof', 'Be ready for "how exactly did you set that up?" follow-ups'],
@@ -36,28 +36,28 @@ window.RJ_DOMAINS = {
     tag: 'FinanceJobs',
   },
   'Legal': {
-    kw: ['legal', 'lawyer', 'attorney', 'law ', 'paralegal', 'contract', 'litigation', 'compliance'],
+    kw: ['legal', 'lawyer', 'attorney', 'law', 'paralegal', 'litigation', 'bluebook', 'bankruptcy', 'j.d'],
     who: 'lawyers and legal professionals', verb: 'review AI legal reasoning for accuracy and missing nuance',
-    fit: ['You practise or have practised law in a specific area', 'You can point to the exact rule, case or clause behind an answer', 'You notice when an answer is confidently wrong'],
+    fit: ['You\'ve done real legal work: practice, clerkship or law-journal cite-checking', 'You can point to the exact rule, case or clause behind an answer', 'You notice when an answer is confidently wrong'],
     prep: ['Choose 2 matters you handled (no confidential details) and the reasoning you used', 'Be ready to explain jurisdiction limits in plain words', 'Practise flagging a flawed legal answer: issue, rule, correct analysis'],
     tag: 'LegalJobs',
   },
   'Healthcare & medicine': {
-    kw: ['doctor', 'physician', 'medical', 'clinical', 'nurse', 'nursing', 'pharmac', 'health', 'dentist', 'radiolog', 'therap'],
+    kw: ['doctor', 'physician', 'medical', 'clinical', 'nurse', 'nursing', 'pharmacist', 'pharmacy', 'healthcare', 'dentist', 'radiolog', 'therapist', 'patient'],
     who: 'doctors, nurses and clinicians', verb: 'check AI medical answers for safety and accuracy',
     fit: ['You hold or held a clinical licence and see real cases', 'You can explain why an answer is unsafe, not just wrong', 'You know current guidelines in your specialty'],
     prep: ['Review current guidelines for your specialty', 'Prepare one case (anonymised) where judgment mattered more than protocol', 'Practise rating an answer for safety first, then completeness'],
     tag: 'HealthcareJobs',
   },
   'Language & writing': {
-    kw: ['writer', 'writing', 'editor', 'translat', 'linguist', 'language', 'localization', 'journalis'],
+    kw: ['writer', 'editor', 'translat', 'linguist', 'language expert', 'localization', 'journalis', 'dialect', 'accent', 'native speaker', 'transcription'],
     who: 'writers, editors and translators', verb: 'judge and improve AI writing in your language',
     fit: ['You write or edit professionally', 'You can explain why a sentence works, not just that it does', 'You\'re fluent at a native level in the language they ask for'],
     prep: ['Prepare 2 samples of your work and the edits that made them better', 'Practise critiquing a paragraph: clarity, tone, accuracy', 'Know the style guide you use and why'],
     tag: 'WritingJobs',
   },
   'Science & math': {
-    kw: ['physics', 'chemistry', 'biology', 'mathematic', 'math', 'phd', 'research scientist', 'stem'],
+    kw: ['physics', 'chemistry', 'biology', 'mathematic', 'math', 'research scientist', 'stem', 'scientific'],
     who: 'scientists and mathematicians', verb: 'write hard problems and check AI reasoning step by step',
     fit: ['You have advanced training in the field (degree or research)', 'You can find the exact step where a proof or derivation fails', 'You enjoy writing problems that are hard but fair'],
     prep: ['Write 2 problems from your field with full solutions', 'Practise explaining one derivation out loud', 'Review common reasoning errors in your field'],
@@ -84,6 +84,13 @@ window.RJ_DOMAINS = {
     prep: ['Gather your best portfolio links (itch.io, Steam, GitHub, jam entries); it matters most', 'Prepare one gameplay bug you hunted down: symptom, cause, fix', 'Practise writing success criteria: input sequence, expected on-screen result'],
     tag: 'GameDev',
   },
+  'Engineering & hardware': {
+    kw: ['mechanical', 'electrical', 'hardware', 'rtl', 'fpga', 'verilog', 'vhdl', 'civil engineer', 'chemical engineer', 'aerospace', 'cad', 'finite element', 'multiphysics', 'firmware', 'circuit', 'semiconductor', 'embedded', 'thermal', 'structural'],
+    who: 'engineers (mechanical, electrical, hardware)', verb: 'build and check engineering problems, models and simulations',
+    fit: ['You do real engineering design or analysis work, not just coursework', 'You can find the exact assumption or boundary condition that makes a result wrong', 'You use Python (or similar) to model, simulate or verify your work'],
+    prep: ['Pick 2 projects you designed or analysed: requirements, model, result, what you changed', 'Practise explaining one simulation or calculation step by step, including its limits', 'Expect coding: warm up on Python for calculations, data handling and plotting'],
+    tag: 'Engineering',
+  },
   'General AI training': {
     kw: [],
     who: 'experienced professionals', verb: 'evaluate and improve AI answers in their field',
@@ -94,9 +101,10 @@ window.RJ_DOMAINS = {
 };
 window.RJ_DETECT = function (text) {
   const t = ' ' + String(text || '').toLowerCase() + ' ';
+  const hits = (k) => (t.match(new RegExp('(^|[^a-z])' + k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?=$|[^a-z])', 'g')) || []).length;
   let best = 'General AI training', score = 0;
   for (const [name, d] of Object.entries(window.RJ_DOMAINS)) {
-    const s = d.kw.reduce((n, k) => n + (t.includes(k) ? (t.split(k).length - 1) : 0), 0);
+    const s = d.kw.reduce((n, k) => n + hits(k), 0);
     if (s > score) { score = s; best = name; }
   }
   return best;

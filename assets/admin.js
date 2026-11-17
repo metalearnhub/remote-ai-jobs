@@ -23,8 +23,8 @@
   function login() {
     $('#tabs').hidden = true;
     app.innerHTML = `<div class="adm"><form class="panel login" id="lf"><h1>Admin sign in</h1><p class="muted small">A 6-digit code goes to your email.</p>
-      <input type="email" id="le" value="dijaedadula@gmail.com" autocomplete="email"><button class="btn primary" id="lb">Email me a code</button>
-      <div id="lc" hidden><input type="text" inputmode="numeric" id="code" placeholder="6-digit code" maxlength="6"><button class="btn primary block" style="margin-top:10px" type="button" id="lv">Sign in</button></div>
+      <input type="email" id="le" value="dijaedadula@gmail.com" autocomplete="email" aria-label="Admin email"><button class="btn primary" id="lb">Email me a code</button>
+      <div id="lc" hidden><input type="text" inputmode="numeric" id="code" placeholder="6-digit code" maxlength="6" aria-label="6-digit code" autocomplete="one-time-code"><button class="btn primary block" style="margin-top:10px" type="button" id="lv">Sign in</button></div>
       <p class="err" id="le2" hidden></p></form></div>`;
     const err = (m) => { const e = $('#le2'); e.textContent = m; e.hidden = !m; };
     $('#lf').onsubmit = async (ev) => {
@@ -54,7 +54,7 @@
     app.innerHTML = `<div class="adm"><div class="row between"><h1>Jobs</h1><a class="btn primary sm" href="#new">+ Add job</a></div>
       <div class="stats"><div><b>${live.length}</b><span>live pages</span></div><div><b>${v}</b><span>page views</span></div><div><b>${a}</b><span>apply clicks</span></div><div><b>${v ? Math.round(a / v * 100) : 0}%</b><span>view → apply</span></div></div>
       <div class="hint">Daily routine (≈1 min): in your referral dashboard, click "Refer and earn" on 1–3 roles, copy the links, and paste them into <a href="#new">Add job</a>. Everything else is written for you. (The dashboard itself stays manual: its terms don't allow automated tools.)</div>
-      <div class="panel" style="margin-top:14px;overflow-x:auto">${JOBS.length ? `<table class="t"><tr><th>Role</th><th class="hm">Domain</th><th>Status</th><th>Views</th><th>Applies</th><th></th></tr>
+      <div class="panel" style="margin-top:14px;overflow-x:auto">${JOBS.length ? `<table class="t cards"><tr><th>Role</th><th class="hm">Domain</th><th>Status</th><th>Views</th><th>Applies</th><th><span class="sr">Actions</span></th></tr>
       ${JOBS.map((j) => `<tr><td><b>${esc(j.title)}</b><br><span class="muted small">${esc(j.pay_text || '')}</span></td><td class="hm">${esc(j.domain)}</td><td><span class="pill ${j.status}">${j.status}</span></td><td>${j.views}</td><td>${j.applies}</td>
       <td class="row" style="justify-content:flex-end"><button class="btn ghost sm" data-copy="${esc(pageUrl(j))}">Copy link</button>${j.status !== 'draft' ? `<a class="btn ghost sm" target="_blank" href="${esc(pageUrl(j))}">Open</a>` : ''}<a class="btn ghost sm" href="#edit-${j.id}">Edit</a></td></tr>`).join('')}</table>` : '<p class="muted">No jobs yet. <a href="#new">Add your first one</a>.</p>'}</div></div>`;
     $$('[data-copy]').forEach((b) => b.onclick = () => copy(b.dataset.copy));
@@ -163,7 +163,7 @@
       <div class="panel"><div class="grid3"><label class="f">Channel tag<input type="text" id="ch" value="" placeholder="e.g. linkedin, fb-group, whatsapp"></label>
       <label class="f">Format<select id="fmt"><option value="full">Title · pay · link</option><option value="md">Markdown</option><option value="url">Links only</option><option value="ref">Raw referral links (private)</option></select></label>
       <div class="row" style="align-items:end"><button class="btn primary" id="cp">Copy all</button></div></div>
-      <textarea id="out" class="big" style="margin-top:12px" readonly></textarea>
+      <textarea id="out" class="big" style="margin-top:12px" readonly aria-label="Links to copy"></textarea>
       <p class="muted small">Share your page links (they capture the email first). Raw referral links skip your capture page; keep them for direct one-to-one sharing.</p></div></div>`;
     const draw = () => {
       const ch = $('#ch').value.trim(), f = $('#fmt').value;
@@ -180,9 +180,9 @@
       ${live.length ? live.map((j) => `<div class="panel" data-id="${j.id}"><div class="row between"><div><b>${esc(j.title)}</b> <span class="muted small">· ${esc(j.pay_text || '')} · ${esc(j.domain)}</span></div><span class="row"><a class="btn ghost sm" target="_blank" href="${esc(pageUrl(j))}">Page</a><button class="btn ghost sm" data-regen>Rewrite posts</button></span></div>
       ${(j.threads || []).every(isNew) && (j.threads || []).length ? `<div class="grid3" style="margin-top:12px">${j.threads.map((p, i) => `<div class="post">
         <div class="row between"><b class="small">${esc(p.angle || 'Post ' + (i + 1))}</b><span class="pill">Topic: ${esc(p.tag || 'Remote Jobs')}</span></div>
-        <label class="small muted">1 · Post</label><textarea data-i="${i}" data-f="text">${esc(p.text)}</textarea>
+        <label class="small muted" for="p${j.id}_${i}">1 · Post</label><textarea id="p${j.id}_${i}" data-i="${i}" data-f="text">${esc(p.text)}</textarea>
         <div class="row between"><span class="count">${p.text.length}/500</span><button class="btn primary sm" data-cp="${i}" data-f="text">Copy post</button></div>
-        <label class="small muted">2 · Reply to your post with</label><textarea class="cm" data-i="${i}" data-f="comment">${esc(p.comment)}</textarea>
+        <label class="small muted" for="c${j.id}_${i}">2 · Reply to your post with</label><textarea id="c${j.id}_${i}" class="cm" data-i="${i}" data-f="comment">${esc(p.comment)}</textarea>
         <div class="row between"><button class="btn ghost sm" data-posted="${i}">${p.posted ? 'Posted ' + esc(p.posted) : 'Mark posted'}</button><button class="btn primary sm" data-cp="${i}" data-f="comment">Copy comment</button></div></div>`).join('')}</div>` : '<p class="muted small" style="margin-top:10px">Old-format drafts. Click "Rewrite posts".</p>'}</div>`).join('') : '<div class="panel muted">Add a job to get posts.</div>'}</div>`;
     $$('.panel[data-id]').forEach((pn) => {
       const j = JOBS.find((x) => String(x.id) === pn.dataset.id);
@@ -203,8 +203,8 @@
       <p class="muted">Every job gets one domain and 2–4 major skills from this shared list. New links reuse what's here; a new skill or domain is only added when nothing matches. Rename a skill to an existing name to merge them.</p>
       <div class="grid2"><div class="panel"><h2>Domains</h2><table class="t">${t.domains.map((d) => `<tr><td>${esc(d.name)}</td><td style="text-align:right">${d.count} job${d.count === 1 ? '' : 's'}</td></tr>`).join('')}</table></div>
       <div class="panel"><h2>Major skills <span class="muted small">(${used.length} in use)</span></h2><table class="t">${[...used, ...unused].map((x) => `<tr><td><b>${esc(x.name)}</b>${x.aliases && x.aliases.length ? `<br><span class="muted small">also: ${esc(x.aliases.slice(0, 6).join(', '))}</span>` : ''}</td><td class="hm muted small">${esc(x.domain || '')}</td><td style="text-align:right;white-space:nowrap">${x.count} · <button class="btn ghost sm" data-ren="${esc(x.name)}">Rename / merge</button></td></tr>`).join('') || '<tr><td class="muted">No skills yet.</td></tr>'}</table></div></div>
-      <div class="panel"><h2>Jobs</h2><table class="t">${JOBS.map((j) => `<tr data-id="${j.id}"><td><b>${esc(j.title)}</b></td><td><select data-dom>${t.domains.map((d) => `<option ${d.name === j.domain ? 'selected' : ''}>${esc(d.name)}</option>`).join('')}<option value="__new">+ New domain…</option></select></td>
-        <td><input type="text" data-tags value="${esc((j.tags || []).join(', '))}" placeholder="Skill, Skill"></td><td><button class="btn ghost sm" data-save>Save</button></td></tr>`).join('')}</table></div></div>`;
+      <div class="panel"><h2>Jobs</h2><table class="t">${JOBS.map((j) => `<tr data-id="${j.id}"><td><b>${esc(j.title)}</b></td><td><select data-dom aria-label="Domain for ${esc(j.title)}">${t.domains.map((d) => `<option ${d.name === j.domain ? 'selected' : ''}>${esc(d.name)}</option>`).join('')}<option value="__new">+ New domain…</option></select></td>
+        <td><input type="text" data-tags aria-label="Major skills for ${esc(j.title)}" value="${esc((j.tags || []).join(', '))}" placeholder="Skill, Skill"></td><td><button class="btn ghost sm" data-save>Save</button></td></tr>`).join('')}</table></div></div>`;
     $('#retag').onclick = async () => { if (!confirm('Re-run categorization for every job? Manual skill edits will be replaced.')) return; try { await api({ action: 'retag_all' }); toast('Done'); viewCats(); } catch (e) { toast(e.message); } };
     $$('[data-ren]').forEach((b) => b.onclick = async () => {
       const to = prompt(`Rename "${b.dataset.ren}" to (type an existing name to merge):`, b.dataset.ren); if (!to || to === b.dataset.ren) return;
@@ -226,7 +226,7 @@
     const L = d.leads || [];
     app.innerHTML = `<div class="adm"><div class="row between"><h1>Leads</h1><button class="btn ghost sm" id="csv">Export CSV</button></div>
       <div class="stats"><div><b>${L.length}</b><span>emails captured</span></div><div><b>${L.filter((x) => x.alerts).length}</b><span>opted in here</span></div><div><b>${d.alert_subscribers}</b><span>active alert subscribers</span></div><div><b>${L.filter((x) => Date.now() - Date.parse(x.created_at) < 7 * 864e5).length}</b><span>last 7 days</span></div></div>
-      <div class="panel" style="overflow-x:auto"><table class="t"><tr><th>Email</th><th>Alerts</th><th class="hm">First role</th><th class="hm">Source</th><th>Date</th></tr>
+      <div class="panel" style="overflow-x:auto" tabindex="0" aria-label="Leads table"><table class="t"><tr><th>Email</th><th>Alerts</th><th class="hm">First role</th><th class="hm">Source</th><th>Date</th></tr>
       ${L.slice(0, 500).map((x) => `<tr><td>${esc(x.email)}</td><td>${x.alerts ? '✓' : '—'}</td><td class="hm">${esc(x.first_job || '')}</td><td class="hm">${esc(x.source || '')}</td><td>${esc(x.created_at.slice(0, 10))}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">No leads yet.</td></tr>'}</table></div></div>`;
     $('#csv').onclick = () => {
       const rows = [['email', 'alerts', 'first_job', 'source', 'created_at'], ...L.map((x) => [x.email, x.alerts, x.first_job || '', x.source || '', x.created_at])];

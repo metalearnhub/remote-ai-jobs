@@ -1,1 +1,1 @@
-{ "name": "remote-ai-jobs", "private": true, "engines": { "node": ">=18" } }
+{ "name": "remote-ai-jobs", "private": true, "engines": { "node": ">=18" }, "dependencies": { "@vercel/og": "0.6.8" } }

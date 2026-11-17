@@ -194,7 +194,7 @@ async function fingerprint(g: any) {
   return await sha256([n(g.title), n(g.pay_text), n(g.openings), n(g.job_type), n(g.raw)].join("|"));
 }
 const refCode = (u: string) => (String(u).match(/[?&]referralCode=([^&#]+)/) || [])[1] || "";
-async function ingest(list: unknown, refresh: boolean, force = false) {
+async function ingest(list: unknown, refresh: boolean, force = false, rebuild = false) {
   const urls = (Array.isArray(list) ? list : String(list || "").split(/\s+/)).map((u) => String(u).trim()).filter(Boolean).slice(0, 8);
   const base = await site();
   const out: any[] = [];
@@ -212,6 +212,20 @@ async function ingest(list: unknown, refresh: boolean, force = false) {
       const g = build(x, u, base);
       const hash = await fingerprint(g);
 
+      if (ex && rebuild) {
+        // Rewrite the whole page from the posting (keeps the address, link, stats and "posted" marks).
+        const keep = ["title", "domain", "pay_text", "job_type", "openings", "skills", "about", "scope", "preferred", "fit", "take", "prep", "raw"];
+        const upd: any = { source_id: id, source_hash: hash, updated_at: new Date().toISOString() };
+        for (const k of keep) upd[k] = (g as any)[k];
+        if (g.status === "closed") upd.status = "closed";
+        await ensureDomain(g.domain);
+        upd.tags = await tagJob(x.skills, g.domain, g.scope.join(" ") + " " + g.title);
+        upd.threads = threads({ ...ex, ...upd }, ex.slug, base).map((p: any, i: number) => ({ ...p, posted: (ex.threads || [])[i]?.posted || null }));
+        const { error } = await db.from("rj_jobs").update(upd).eq("id", ex.id);
+        if (error) throw new Error(error.message);
+        out.push({ url: u, ok: true, updated: true, changes: ["page rewritten from the posting"], slug: ex.slug, title: g.title, pay_text: g.pay_text, domain: g.domain, tags: upd.tags, status: upd.status || ex.status });
+        continue;
+      }
       if (ex) {
         // Same job post. Compare the link and every detail.
         const changes: string[] = [];
@@ -383,7 +397,7 @@ async function admin(b: any, email: string) {
     return j({ id: data.id });
   }
   if (a === "alert_step") return await alertStep(Number(b.id) || 0, !!b.test, email);
-  if (a === "ingest") return j(await ingest(b.urls, !!b.refresh, !!b.force));
+  if (a === "ingest") return j(await ingest(b.urls, !!b.refresh, !!b.force, !!b.rebuild));
   if (a === "taxonomy") return j(await taxonomy(false));
   if (a === "retag_all") return j(await retagAll());
   if (a === "tax_rename") { const r = await renameSkill(b.from, b.to); return j(r, (r as any).error ? 400 : 200); }
@@ -488,7 +502,7 @@ Deno.serve(async (req) => {
       if (k.length < 32 || String(b.key || "") !== k) return j({ error: "unauthorized" }, 401);
       if (b.retag_all) return j(await retagAll());
       if (b.hash_all) return j(await hashAll());
-      return j(await ingest(b.urls, !!b.refresh, !!b.force));
+      return j(await ingest(b.urls, !!b.refresh, !!b.force, !!b.rebuild));
     }
     const email = String(b.email || "").trim().toLowerCase();
     if (b.action === "code") return await sendCode(email);

@@ -33,6 +33,25 @@ table.t th { font-size: .78rem; color: var(--ink-2); font-weight: 700; }
 .hint { background: var(--accent-soft); border-radius: var(--r-s); padding: 10px 14px; font-size: .9rem; }
 .prog { height: 8px; background: var(--sunk); border-radius: 99px; overflow: hidden; }
 .prog i { display: block; height: 100%; background: var(--accent); width: 0; transition: width .3s; }
-@media (max-width: 760px) { .grid2, .grid3, .stats { grid-template-columns: minmax(0, 1fr); } .bar nav { gap: 10px; font-size: .8rem; overflow-x: auto; } table.t .hm { display: none; } }
+@media (max-width: 760px) {
+  .grid2, .grid3 { grid-template-columns: minmax(0, 1fr); }
+  .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .bar .wrap { flex-wrap: wrap; height: auto; padding-top: 10px; padding-bottom: 0; row-gap: 6px; }
+  .bar nav { order: 3; width: 100%; margin-left: 0; gap: 4px; overflow-x: auto; scrollbar-width: none; padding-bottom: 6px; }
+  .bar nav::-webkit-scrollbar { display: none; }
+  .bar nav a { white-space: nowrap; padding: 8px 10px; border-radius: 9px; font-size: .9rem; }
+  .bar nav a.on { background: var(--accent-soft); }
+  table.t .hm { display: none; }
+  table.t.cards, table.t.cards tbody, table.t.cards tr, table.t.cards td { display: block; width: 100%; }
+  table.t.cards tr:first-child { display: none; }
+  table.t.cards tr { border-bottom: 1px solid var(--line); padding: 12px 0; }
+  table.t.cards td { border: 0; padding: 3px 0; }
+  table.t.cards td.row { justify-content: flex-start !important; margin-top: 6px; }
+  table.t.cards td:nth-child(4)::before { content: 'Views: '; color: var(--ink-2); }
+  table.t.cards td:nth-child(5)::before { content: 'Applies: '; color: var(--ink-2); }
+  table.t.cards td:nth-child(4), table.t.cards td:nth-child(5) { display: inline-block; width: auto; margin-right: 14px; font-size: .9rem; }
+  .post textarea { min-height: 220px; }
+}
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .warn { color: var(--warn); font-weight: 600; }
 tr.dup td { background: color-mix(in srgb, var(--warn) 8%, transparent); }

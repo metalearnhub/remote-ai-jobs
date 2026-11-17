@@ -65,7 +65,7 @@ const decode = (t) => t.replace(/&(#x?[0-9a-f]+|[a-z0-9]+);/gi, (m, e) => {
   if (e[0] === "#") { const n = e[1] === "x" || e[1] === "X" ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10); return Number.isFinite(n) ? String.fromCodePoint(n) : m; }
   return ENT[e.toLowerCase()] ?? m;
 });
-const clean = (t) => decode(String(t).replace(/<br\s*\/?>/gi, " ").replace(/<[^>]+>/g, "")).replace(/\s+/g, " ").trim();
+const clean = (t) => decode(String(t).replace(/<br\s*\/?>/gi, " ").replace(/<[^>]+>/g, "")).replace(/\bAn?(BSc|MSc|BA|BS|MS|PhD|MBA|MD|JD)\b/g, "A $1").replace(/\s+/g, " ").trim();
 
 function blocks(html) {
   const out = [];
@@ -81,33 +81,38 @@ function blocks(html) {
   return out;
 }
 const SEC = [
-  ["meta", /^(job title|role title|title|job type|role type|employment type|location|work location|commitment|hours|duration|start date|schedule)\b/i],
+  ["meta", /^(job title|role title|title|job type|role type|employment type|location|work location|commitment|hours|duration|start date|schedule|pay|compensation|rate|time commitment|engagement)\b/i],
   ["pref", /^(preferred|nice to have|bonus|plus|good to have|desirable)/i],
   ["req", /^(required|requirements|minimum qualifications|qualifications|must have|what we.?re looking for|who you are|what you bring|ideal candidate|you have|skills and qualifications|eligibility)/i],
-  ["scope", /^(key responsibilities|responsibilities|scope|what you.?ll do|what you will do|duties|day[- ]to[- ]day|your role|the work|tasks|you will)/i],
-  ["about", /^(job summary|summary|about the role|about this role|role overview|overview|about the job|the role|about the opportunity|description|job description|about)\b/i],
-  ["extra", /^(additional info|additional information|benefits|perks|why join|compensation|pay|what we offer|about micro1|about us|how to apply|our hiring process)/i],
+  ["scope", /^(key responsibilities|responsibilities|scope|what you.?ll (do|work on|be doing)|what you will (do|work on)|duties|day[- ]to[- ]day|your role|the work|tasks|you will|what the work looks like|how you.?ll help)/i],
+  ["about", /^(job summary|summary|about the role|about this role|role overview|overview|about the job|the role|about the opportunity|opportunity snapshot|snapshot|role summary|position summary|the opportunity|description|job description|about)\b/i],
+  ["extra", /^(additional info|additional information|benefits|perks|why join|what we offer|about micro1|about us|how to apply|our hiring process|application process|next steps)/i],
 ];
 function sectionOf(label) { for (const [k, re] of SEC) if (re.test(label)) return k; return null; }
 
-export function sections(html) {
-  const r = { meta: {}, about: [], scope: [], req: [], pref: [], extra: [], text: [] };
+export function sections(html, title = "") {
+  const r = { meta: {}, about: [], aboutList: [], scope: [], req: [], pref: [], extra: [], text: [] };
+  const T = String(title || "").toLowerCase().replace(/\s+/g, " ").trim();
   let cur = "about";
   for (const b of blocks(html)) {
+    const low = b.text.toLowerCase();
+    if (T && (low === T || low === T + ":")) continue; // the posting repeats its own title
     r.text.push(b.tag === "li" ? "• " + b.text : b.text);
     if (b.tag !== "li") {
       const lab = b.text.match(/^([A-Za-z][A-Za-z '’/&()-]{1,60}):\s*(.*)$/);
       if (lab) {
         const k = sectionOf(lab[1]);
         if (k === "meta") { r.meta[lab[1].toLowerCase()] = lab[2]; continue; }
+        if (k && lab[2] && k === "extra") { r.extra.push(lab[2]); continue; } // "Benefits: …" inline: don't swallow what follows
         if (k) { cur = k; if (lab[2]) r[k].push(lab[2]); continue; }
       }
       if ((b.tag[0] === "h" || b.strong || b.text.length < 70) && !/[.!?]$/.test(b.text)) {
         const k = sectionOf(b.text.replace(/:$/, ""));
         if (k && k !== "meta") { cur = k; continue; }
+        if (b.tag[0] === "h" && !k) { cur = "extra"; continue; } // unknown heading: park it
       }
     }
-    r[cur].push(b.text);
+    if (cur === "about" && b.tag === "li") r.aboutList.push(b.text); else r[cur].push(b.text);
   }
   return r;
 }
@@ -134,13 +139,24 @@ const short = (s, n) => {
   const cut = s.slice(0, n), c = cut.lastIndexOf(","), w = cut.lastIndexOf(" ");
   return cut.slice(0, c > n * 0.45 ? c : w).replace(/\s+(and|or|the|a|an|of|in|to|with|for|related)$/i, "").replace(/[,;:\s]+$/, "");
 };
+// Turns recruiting boilerplate into a plain description of the work, or returns null.
+function plain(sen) {
+  const m = sen.match(/^(?:we are|we're|micro1 is|micro1 are|our client is|the client is)\s+(?:looking for|engaging|hiring|seeking|recruiting|partnering with [^,]+? to hire)\s+(?:a |an )?(?:highly[- ]skilled |experienced |talented |top |skilled )?(.+?)\s+(?:to|who will|who can)\s+(?:contribute to|support|help with|help|join|work on|participate in)\s+(.+?)\.?$/i);
+  if (!m) return null;
+  const what = lc(m[2].replace(/^(an?|the)\s+/i, ""));
+  const plural = /^(\S+\s+){0,3}(projects|tasks|programs|initiatives)\b/i.test(what);
+  const art = plural ? "" : /^[aeiou]/i.test(what) ? "An " : "A ";
+  const body = art ? what : what.charAt(0).toUpperCase() + what.slice(1);
+  return `${art}${body}, for ${m[1].replace(/^(a|an)\s+/i, "")}.`;
+}
 const BOILER = /(^micro1 is |^micro1, |help train next-generation ai|shape how models learn|high-quality, real-world input|cutting-edge|unique opportunity|passionate and multidisciplinary|micro1 is (a|partnering)|leading ai lab|we are looking for|we're looking for|join (our|a) )/i;
 
 export function detectDomain(title, body) {
   const score = (t, w) => {
     const s = " " + String(t || "").toLowerCase() + " ";
+    const hit = (k) => (s.match(new RegExp("(^|[^a-z])" + k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "(?=$|[^a-z])", "g")) || []).length;
     const r = {};
-    for (const [name, d] of Object.entries(DOMAINS)) r[name] = d.kw.reduce((n, k) => n + (s.split(k).length - 1), 0) * w;
+    for (const [name, d] of Object.entries(DOMAINS)) r[name] = d.kw.reduce((n, k) => n + hit(k), 0) * w;
     return r;
   };
   const a = score(title, 4), b = score(body, 1);
@@ -151,8 +167,8 @@ export function detectDomain(title, body) {
 
 // ---------- data → page ----------
 export function build(x, referralUrl, siteUrl = "https://jobs.dijaedadula.com") {
-  const sec = sections(x.desc);
-  const title = x.title || sec.meta["job title"] || sec.meta["role title"] || "Remote AI role";
+  const title = x.title || "Remote AI role";
+  const sec = sections(x.desc, title);
   const all = sec.text.join(" ");
   let domain = detectDomain(title, [x.skills.join(" "), sec.scope.join(" "), sec.req.join(" ")].join(" "));
   if (domain === "General AI training") domain = domainFromSlug(x.domainSlug) || domain;
@@ -169,8 +185,13 @@ export function build(x, referralUrl, siteUrl = "https://jobs.dijaedadula.com") 
   const job_type = typeBits.filter(Boolean).join(" · ");
 
   // lists
-  const bullet = (s) => { const t = noDot(String(s).replace(/^[-•*·]\s*/, "")); const f = sentences(t)[0] || t; return f.length > 230 ? short(f, 230) : noDot(f); };
-  const scope = sec.scope.filter((s) => s.length > 12 && !BOILER.test(s)).map(bullet).slice(0, 6);
+  const bullet = (s) => { const t = noDot(String(s).replace(/^[-•*·]\s*/, "").replace(/[;,]\s*(or|and)\s*$/i, "")); const f = sentences(t)[0] || t; return f.length > 230 ? short(f, 230) : noDot(f); };
+  let scope = sec.scope.filter((s) => s.length > 12 && !BOILER.test(s)).map(bullet).slice(0, 6);
+  if (!scope.length) {
+    const inv = sentences(sec.about.join(" ")).find((s) => /^the work involves|^you will|^you'll|^your work/i.test(s));
+    if (inv) scope = [noDot(inv.replace(/^the work involves\s+/i, "")).replace(/^./, (c) => c.toUpperCase())];
+    if (sec.aboutList.length && sec.aboutList.length <= 12) scope.push("Work in your strongest area: " + sec.aboutList.map(noDot).slice(0, 8).join(", "));
+  }
   const req = sec.req.filter((s) => s.length > 8 && !BOILER.test(s)).map(bullet);
   const pref = sec.pref.filter((s) => s.length > 8).map(bullet);
   const preferred = [...req.slice(0, 5), ...pref.slice(0, 2)];
@@ -178,9 +199,10 @@ export function build(x, referralUrl, siteUrl = "https://jobs.dijaedadula.com") 
 
   // about: what the work really is, in plain words
   const noAI = /no (prior )?(experience in ai|ai experience)|no ai (background|experience)|ai experience (is )?not required/i.test(all);
-  const sum = sentences(sec.about.join(" ")).filter((s) => !BOILER.test(s) && !/no (prior )?(experience in ai|ai experience)/i.test(s) && s.length < 240);
+  const sum = sentences(sec.about.join(" ")).map((s) => plain(s) || s).filter((s) => !BOILER.test(s) && !/no (prior )?(experience in ai|ai experience)/i.test(s) && !/^(this is a|candidates (must|should|are)|pay|location|job type)\b/i.test(s) && s.length > 25 && s.length < 260);
   const a1 = scope[0] ? `You'll ${lc(short(scope[0], 170))}.` : "";
-  let about = [sum[0] || "", /^You('ll| will) /.test(sum[0] || "") ? "" : a1].filter(Boolean).join(" ");
+  let about = [sum[0] || "", sum[1] && /^(the work|you('ll| will)|your work|tasks)\b/i.test(sum[1]) ? sum[1] : (/^You('ll| will) /.test(sum[0] || "") ? "" : a1)].filter(Boolean).join(" ");
+  if (about.length > 420) about = short(about, 420) + ".";
   if (!about) about = `Remote work where you ${d.verb}.`;
   if (noAI) about += " No AI experience needed: your domain knowledge is what counts.";
   about = about.replace(/\s+/g, " ").trim();
@@ -189,8 +211,11 @@ export function build(x, referralUrl, siteUrl = "https://jobs.dijaedadula.com") 
   const W = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10 };
   const ym = all.match(/\b(\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten)\+?\s*(?:or more\s*)?years?\b[^•;]{0,50}?\b(?:experience|working)\s+(in|as|with)\s+([^.;•]{4,80})/i);
   const yrs = ym ? [ym[0], String(W[ym[1].toLowerCase()] || ym[1]), (ym[2].toLowerCase() === "as" ? "as " : "") + ym[3]] : null;
-  const jd = /\bJ\.?D\b/.test(all), bar = /bar admission|admitted to (the|a) .{0,20}bar|licensed attorney/i.test(all);
-  const cred = jd && bar ? "a J.D. and active bar admission" : jd ? "a J.D." : (all.match(/\b(board[- ]certified|Ph\.?D|M\.?D\.|CPA|CFA|licensed (?:physician|nurse|pharmacist|engineer))\b/) || [])[1];
+  const must = [...sec.about, ...sec.aboutList, ...sec.req, ...sec.scope].join(" ");
+  const jd = /\bJ\.?D\b/.test(must), bar = /bar admission|admitted to (the|a) .{0,20}bar|licensed attorney/i.test(must);
+  let cred = jd && bar ? "a J.D. and active bar admission" : jd ? "a J.D." : (must.match(/\b(board[- ]certified|Ph\.?D|M\.?D\.|CPA|CFA|licensed (?:physician|nurse|pharmacist|engineer))\b/) || [])[1];
+  if (cred && new RegExp("(or|preferred|ideally|plus|bonus)[^.]{0,40}" + cred.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i").test(must)) cred = null; // "Master's or PhD" / "PhD preferred" isn't a hard requirement
+  if (cred && /^ph\.?d$/i.test(cred)) cred = "a PhD";
   const based = (all.match(/based in (?:an? )?([^.;,]{3,40})/i) || [])[1];
   const fewCountries = x.countries.length && x.countries.length <= 6 ? x.countries : null;
 

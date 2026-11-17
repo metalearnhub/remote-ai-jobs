@@ -5,17 +5,20 @@ const SITE = process.env.SITE_URL || 'https://jobs.dijaedadula.com';
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const li = (a) => (a || []).map((x) => `<li>${esc(x)}</li>`).join('');
 
-function shell({ title, desc, url, body, robots = 'index,follow', jsonld = '' }) {
+function shell({ title, desc, url, body, robots = 'index,follow', jsonld = '', image = `${SITE}/assets/og.png`, alt = 'Remote AI Work: remote AI roles, pay as posted' }) {
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${esc(title)}</title><meta name="description" content="${esc(desc)}"><meta name="robots" content="${robots}">
-<link rel="canonical" href="${esc(url)}"><meta property="og:type" content="website"><meta property="og:title" content="${esc(title)}">
-<meta property="og:description" content="${esc(desc)}"><meta property="og:url" content="${esc(url)}"><meta property="og:image" content="${SITE}/assets/og.png">
-<meta name="twitter:card" content="summary_large_image"><link rel="icon" href="/assets/icon.svg"><link rel="stylesheet" href="/assets/site.css">${jsonld}</head>
+<link rel="canonical" href="${esc(url)}"><meta property="og:type" content="website"><meta property="og:site_name" content="Remote AI Work"><meta property="og:locale" content="en_US">
+<meta property="og:title" content="${esc(title)}"><meta property="og:description" content="${esc(desc)}"><meta property="og:url" content="${esc(url)}">
+<meta property="og:image" content="${esc(image)}"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:alt" content="${esc(alt)}">
+<meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="${esc(title)}"><meta name="twitter:description" content="${esc(desc)}"><meta name="twitter:image" content="${esc(image)}"><meta name="twitter:image:alt" content="${esc(alt)}">
+<meta name="theme-color" content="#4B2EE8"><link rel="icon" href="/assets/icon.svg" type="image/svg+xml"><link rel="icon" href="/assets/favicon-32.png" sizes="32x32" type="image/png"><link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="/assets/site.css">${jsonld}</head>
 <body>${body}</body></html>`;
 }
 
 const BAR = `<header class="bar"><div class="wrap"><a class="logo" href="/"><img src="/assets/icon.svg" alt="" width="34" height="34"><span>Remote AI Work<small>curated by Dijae Dadula</small></span></a>
-<nav><a href="/">Open roles</a><a class="hide-m" href="/guide">Free guide</a><a class="hide-m" href="/privacy">Disclosure</a></nav></div></header>`;
+<nav aria-label="Main"><a href="/"><span class="hide-s">Open roles</span><span class="show-s">Roles</span></a><a href="/guide"><span class="hide-s">Free guide</span><span class="show-s">Guide</span></a><a class="hide-m" href="/privacy">Disclosure</a></nav></div></header>`;
 const FOOT = `<footer class="foot"><div class="wrap">Independent job page by Dijae Dadula. Not affiliated with, sponsored by or endorsed by micro1 or any employer. Some links are referral links, and I may earn a referral bonus if you're hired. Pay, openings and requirements are as posted and can change; nothing here guarantees an interview, placement or pay. <a href="/privacy">Privacy & disclosure</a> · <a href="/guide">Free guide</a></div></footer>`;
 
 function notFound() {
@@ -27,7 +30,8 @@ function render(j) {
   const url = `${SITE}/j/${j.slug}`;
   const closed = j.status !== 'live';
   const company = j.company || 'micro1';
-  const desc = `${j.title}${j.pay_text ? ` · ${j.pay_text}` : ''} · ${j.job_type || 'Remote'}. ${String(j.about || '').slice(0, 140)}`;
+  const cut = (t, n) => { t = String(t || '').replace(/\s+/g, ' ').trim(); if (t.length <= n) return t; const c = t.slice(0, n); return c.slice(0, c.lastIndexOf(' ')).replace(/[,;:.\s]+$/, '') + '…'; };
+  const desc = cut(`${j.pay_text ? `${j.pay_text} (as posted) · ` : ''}${j.job_type || 'Remote'}. ${j.about || ''}`, 158);
   const faqs = [
     [`Is this page ${company}?`, `No. It's an independent page by Dijae Dadula. ${company} hires and pays. When you continue, you apply on ${company}'s own site through my referral link, and I may earn a referral bonus if you're hired. It costs you nothing.`],
     ['Do I have to pay anything to apply?', `No. Applying is free. Never pay anyone to "unlock" a remote AI role.`],
@@ -79,7 +83,9 @@ function render(j) {
 ${closed ? '' : `<div class="mobile-cta"><b>${esc(j.pay_text || '')}</b><a class="btn primary" href="#pass">Apply now</a></div>`}
 ${FOOT}
 <script>window.RJ_FN=${JSON.stringify(FN)};</script><script src="/assets/job.js" defer></script>`;
-  return shell({ title: `${j.title}${j.pay_text ? ` (${j.pay_text})` : ''} · Remote AI Work`, desc, url, body, jsonld });
+  const crumbs = `<script type="application/ld+json">${JSON.stringify({ '@context': 'https://schema.org', '@type': 'BreadcrumbList', itemListElement: [{ '@type': 'ListItem', position: 1, name: 'Open roles', item: SITE + '/' }, { '@type': 'ListItem', position: 2, name: j.domain || 'Role', item: `${SITE}/?d=${encodeURIComponent(j.domain || '')}` }, { '@type': 'ListItem', position: 3, name: j.title, item: url }] }).replace(/</g, '\\u003c')}</script>`;
+  const v = encodeURIComponent(String(j.updated_at || '').replace(/\D/g, '').slice(0, 12));
+  return shell({ title: `${j.title}${j.pay_text ? ` (${j.pay_text})` : ''} · Remote AI Work`, desc, url, body, jsonld: jsonld + crumbs, image: `${SITE}/og/${j.slug}.png${v ? '?v=' + v : ''}`, alt: `${j.title}${j.pay_text ? ', ' + j.pay_text + ' as posted' : ''}` });
 }
 
 module.exports = async (req, res) => {
