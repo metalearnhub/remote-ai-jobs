@@ -56,10 +56,50 @@
       <div class="hint">Daily routine (≈1 min): in your referral dashboard, click "Refer and earn" on 1–3 roles, copy the links, and paste them into <a href="#new">Add job</a>. Everything else is written for you. (The dashboard itself stays manual: its terms don't allow automated tools.)</div>
       <div class="panel" style="margin-top:14px;overflow-x:auto">${JOBS.length ? `<table class="t cards"><tr><th>Role</th><th class="hm">Domain</th><th>Status</th><th>Views</th><th>Applies</th><th><span class="sr">Actions</span></th></tr>
       ${JOBS.map((j) => `<tr><td><b>${esc(j.title)}</b><br><span class="muted small">${esc(j.pay_text || '')}</span></td><td class="hm">${esc(j.domain)}</td><td><span class="pill ${j.status}">${j.status}</span></td><td>${j.views}</td><td>${j.applies}</td>
-      <td class="row" style="justify-content:flex-end"><button class="btn ghost sm" data-copy="${esc(pageUrl(j))}">Copy link</button>${j.status !== 'draft' ? `<a class="btn ghost sm" target="_blank" href="${esc(pageUrl(j))}">Open</a>` : ''}<a class="btn ghost sm" href="#edit-${j.id}">Edit</a></td></tr>`).join('')}</table>` : '<p class="muted">No jobs yet. <a href="#new">Add your first one</a>.</p>'}</div></div>`;
+      <td class="row" style="justify-content:flex-end">${j.referral_url ? `<button class="btn primary sm" data-posts="${j.id}">Posts</button>` : ''}<button class="btn ghost sm" data-copy="${esc(pageUrl(j))}">Copy link</button>${j.status !== 'draft' ? `<a class="btn ghost sm" target="_blank" href="${esc(pageUrl(j))}">Open</a>` : ''}<a class="btn ghost sm" href="#edit-${j.id}">Edit</a></td></tr>`).join('')}</table>` : '<p class="muted">No jobs yet. <a href="#new">Add your first one</a>.</p>'}</div></div>`;
     $$('[data-copy]').forEach((b) => b.onclick = () => copy(b.dataset.copy));
+    $$('[data-posts]').forEach((b) => b.onclick = () => openPosts(+b.dataset.posts));
   }
 
+  // ---------- posts modal: every post + reply for one job, with instant copy ----------
+  const isNewPost = (p) => p && typeof p.comment === 'string';
+  async function openPosts(id) {
+    let j = JOBS.find((x) => x.id === id);
+    if (!j) return;
+    if (!(j.threads || []).length || !(j.threads || []).every(isNewPost)) {
+      toast('Writing posts…');
+      try { const d = await api({ action: 'rethread', id }); if (d.job) Object.assign(j, d.job); } catch (e) { return toast(e.message); }
+    }
+    const url = pageUrl(j);
+    const SEP = '\n\n━━━━━━━━━━\n\n';
+    const both = (p) => `${p.text}\n\n— Reply with —\n${p.comment}`;
+    const m = document.createElement('div');
+    m.className = 'modal'; m.setAttribute('role', 'dialog'); m.setAttribute('aria-modal', 'true'); m.setAttribute('aria-labelledby', 'mh');
+    m.innerHTML = `<div class="sheet"><div class="mhead"><div><b id="mh">${esc(j.title)}</b><span class="muted small">${esc(j.pay_text || '')} · ${esc(j.domain || '')}</span></div><button class="x" aria-label="Close">✕</button></div>
+      <div class="mbar"><button class="btn primary sm" data-all>Copy all posts</button><button class="btn ghost sm" data-sel>Copy selected</button><button class="btn ghost sm" data-link>Copy page link</button></div>
+      <div class="mbody">${j.threads.map((p, i) => `<div class="mpost">
+        <div class="row between"><label class="check"><input type="checkbox" data-pick="${i}" checked> <b>${esc(p.angle || 'Post ' + (i + 1))}</b></label><span class="pill">Topic: ${esc(p.tag || 'Remote Jobs')}</span></div>
+        <div class="mlabel">1 · Post <span class="muted">(${p.text.length}/500)</span></div><pre class="mtext">${esc(p.text)}</pre>
+        <div class="mlabel">2 · Reply to your own post with</div><pre class="mtext cm">${esc(p.comment)}</pre>
+        <div class="row"><button class="btn primary sm" data-c="text" data-i="${i}">Copy post</button><button class="btn ghost sm" data-c="comment" data-i="${i}">Copy reply</button><button class="btn ghost sm" data-c="both" data-i="${i}">Copy both</button><button class="btn ghost sm" data-posted="${i}">${p.posted ? 'Posted ' + esc(p.posted) : 'Mark posted'}</button></div>
+      </div>`).join('')}</div></div>`;
+    const close = () => { m.remove(); document.removeEventListener('keydown', onKey); document.body.style.overflow = ''; };
+    const onKey = (e) => { if (e.key === 'Escape') close(); };
+    m.addEventListener('click', async (e) => {
+      if (e.target === m || e.target.closest('.x')) return close();
+      const b = e.target.closest('button'); if (!b) return;
+      if (b.dataset.c) { const p = j.threads[+b.dataset.i]; await copy(b.dataset.c === 'both' ? both(p) : p[b.dataset.c]); flash(b); }
+      else if ('all' in b.dataset) { await copy(j.threads.map(both).join(SEP)); flash(b); }
+      else if ('sel' in b.dataset) { const pick = $$('[data-pick]:checked', m).map((x) => j.threads[+x.dataset.pick]); if (!pick.length) return toast('Tick at least one post'); await copy(pick.map(both).join(SEP)); flash(b); }
+      else if ('link' in b.dataset) { await copy(url); flash(b); }
+      else if (b.dataset.posted != null) { const i = +b.dataset.posted; j.threads[i].posted = j.threads[i].posted ? null : new Date().toISOString().slice(0, 10); b.textContent = j.threads[i].posted ? 'Posted ' + j.threads[i].posted : 'Mark posted'; try { await api({ action: 'save', job: Object.assign({}, j) }); } catch (x) { toast(x.message); } }
+    });
+    document.addEventListener('keydown', onKey);
+    document.body.style.overflow = 'hidden';
+    document.body.appendChild(m);
+    m.querySelector('.x').focus();
+  }
+  function flash(b) { if (b._f) return; const t = b.textContent; b._f = 1; b.textContent = 'Copied ✓'; b.classList.add('ok'); setTimeout(() => { b.textContent = t; b.classList.remove('ok'); b._f = 0; }, 1400); }
 
   function viewAdd() {
     app.innerHTML = `<div class="adm"><h1>Add jobs</h1>
@@ -98,10 +138,11 @@
           : `<span class="muted small">${esc(r.url)}</span><br><span class="err" style="display:block">${esc(r.error)}</span>`;
         $('#res').innerHTML = `<div class="hint" style="margin-top:14px">${nNew} new · ${nUpd} updated · ${nDup} duplicate${nDup === 1 ? '' : 's'} skipped${d.results.length - nNew - nUpd - nDup ? ' · ' + (d.results.length - nNew - nUpd - nDup) + ' failed' : ''}</div>
           <table class="t" style="margin-top:8px">${d.results.map((r) => `<tr class="${r.duplicate ? 'dup' : ''}"><td style="width:28px">${icon(r)}</td><td>${line(r)}</td>
-          <td style="text-align:right;white-space:nowrap">${r.slug ? `<a class="btn ghost sm" target="_blank" href="${esc(SITE + '/j/' + r.slug)}">Open</a> <button class="btn ghost sm" data-copy="${esc(SITE + '/j/' + r.slug)}">Copy link</button>` : ''}</td></tr>`).join('')}</table>
+          <td style="text-align:right;white-space:nowrap">${r.slug && (r.created || r.updated) ? `<button class="btn primary sm" data-postslug="${esc(r.slug)}">Posts</button> ` : ''}${r.slug ? `<a class="btn ghost sm" target="_blank" href="${esc(SITE + '/j/' + r.slug)}">Open</a> <button class="btn ghost sm" data-copy="${esc(SITE + '/j/' + r.slug)}">Copy link</button>` : ''}</td></tr>`).join('')}</table>
           ${nNew || nUpd ? '<div class="row" style="margin-top:12px"><a class="btn primary sm" href="#threads">Go to Threads posts →</a></div>' : ''}`;
         if (nDup) toast(nDup + ' duplicate' + (nDup === 1 ? '' : 's') + ' skipped');
-        refresh().catch(() => {});
+        await refresh().catch(() => {});
+        $$('[data-postslug]').forEach((x) => x.onclick = () => { const jb = JOBS.find((y) => y.slug === x.dataset.postslug); if (jb) openPosts(jb.id); });
         $$('[data-copy]').forEach((x) => x.onclick = () => copy(x.dataset.copy));
         if (d.results.every((r) => r.ok || r.duplicate)) { $('#urls').value = ''; $('#pre').innerHTML = ''; }
       } catch (e) { $('#res').innerHTML = `<p class="err">${esc(e.message)}</p>`; }
