@@ -72,16 +72,16 @@
     }
     const url = pageUrl(j);
     const SEP = '\n\n━━━━━━━━━━\n\n';
-    const both = (p) => `${p.text}\n\n— Reply with —\n${p.comment}`;
+    const both = (p) => (p.comment ? `${p.text}\n\n— Reply with —\n${p.comment}` : p.text);
     const m = document.createElement('div');
     m.className = 'modal'; m.setAttribute('role', 'dialog'); m.setAttribute('aria-modal', 'true'); m.setAttribute('aria-labelledby', 'mh');
     m.innerHTML = `<div class="sheet"><div class="mhead"><div><b id="mh">${esc(j.title)}</b><span class="muted small">${esc(j.pay_text || '')} · ${esc(j.domain || '')}</span></div><button class="x" aria-label="Close">✕</button></div>
-      <div class="mbar"><button class="btn primary sm" data-all>Copy all posts</button><button class="btn ghost sm" data-sel>Copy selected</button><button class="btn ghost sm" data-link>Copy page link</button></div>
+      <div class="mbar"><button class="btn primary sm" data-all>Copy all 3 posts</button><button class="btn ghost sm" data-sel>Copy ticked</button><button class="btn ghost sm" data-link>Copy page link</button></div>
       <div class="mbody">${j.threads.map((p, i) => `<div class="mpost">
         <div class="row between"><label class="check"><input type="checkbox" data-pick="${i}" checked> <b>${esc(p.angle || 'Post ' + (i + 1))}</b></label><span class="pill">Topic: ${esc(p.tag || 'Remote Jobs')}</span></div>
-        <div class="mlabel">1 · Post <span class="muted">(${p.text.length}/500)</span></div><pre class="mtext">${esc(p.text)}</pre>
-        <div class="mlabel">2 · Reply to your own post with</div><pre class="mtext cm">${esc(p.comment)}</pre>
-        <div class="row"><button class="btn primary sm" data-c="text" data-i="${i}">Copy post</button><button class="btn ghost sm" data-c="comment" data-i="${i}">Copy reply</button><button class="btn ghost sm" data-c="both" data-i="${i}">Copy both</button><button class="btn ghost sm" data-posted="${i}">${p.posted ? 'Posted ' + esc(p.posted) : 'Mark posted'}</button></div>
+        <div class="mlabel"><span>1 · Post <span class="muted">${p.text.length}/500</span></span><button class="btn primary sm" data-c="text" data-i="${i}">Copy post</button></div><pre class="mtext">${esc(p.text)}</pre>
+        ${p.comment ? `<div class="mlabel"><span>2 · Reply to your own post</span><button class="btn ghost sm" data-c="comment" data-i="${i}">Copy reply</button></div><pre class="mtext cm">${esc(p.comment)}</pre>` : ''}
+        <div class="mfoot"><button class="btn ghost sm" data-c="both" data-i="${i}">Copy post + reply</button><button class="btn ghost sm" data-posted="${i}">${p.posted ? '✓ Posted ' + esc(p.posted) : 'Mark posted'}</button></div>
       </div>`).join('')}</div></div>`;
     const close = () => { m.remove(); document.removeEventListener('keydown', onKey); document.body.style.overflow = ''; };
     const onKey = (e) => { if (e.key === 'Escape') close(); };
@@ -92,7 +92,7 @@
       else if ('all' in b.dataset) { await copy(j.threads.map(both).join(SEP)); flash(b); }
       else if ('sel' in b.dataset) { const pick = $$('[data-pick]:checked', m).map((x) => j.threads[+x.dataset.pick]); if (!pick.length) return toast('Tick at least one post'); await copy(pick.map(both).join(SEP)); flash(b); }
       else if ('link' in b.dataset) { await copy(url); flash(b); }
-      else if (b.dataset.posted != null) { const i = +b.dataset.posted; j.threads[i].posted = j.threads[i].posted ? null : new Date().toISOString().slice(0, 10); b.textContent = j.threads[i].posted ? 'Posted ' + j.threads[i].posted : 'Mark posted'; try { await api({ action: 'save', job: Object.assign({}, j) }); } catch (x) { toast(x.message); } }
+      else if (b.dataset.posted != null) { const i = +b.dataset.posted; j.threads[i].posted = j.threads[i].posted ? null : new Date().toISOString().slice(0, 10); b.textContent = j.threads[i].posted ? '✓ Posted ' + j.threads[i].posted : 'Mark posted'; try { await api({ action: 'save', job: Object.assign({}, j) }); } catch (x) { toast(x.message); } }
     });
     document.addEventListener('keydown', onKey);
     document.body.style.overflow = 'hidden';

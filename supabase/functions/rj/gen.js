@@ -280,7 +280,7 @@ export function threads(job, slug, siteUrl = "https://jobs.dijaedadula.com") {
   const remote = /remote/i.test(job.job_type);
   const kind = /full-time/i.test(job.job_type) ? "full-time" : /per task/i.test(job.job_type) ? "paid per task" : "contract";
   const noAI = /no ai experience needed/i.test(job.about);
-  const field = job.domain === "General AI training" ? "field" : job.domain.toLowerCase().replace(" & ", " and ");
+  const field = job.domain === "General AI training" ? "field" : job.domain.replace(" & ", " and ").split(" ").map((w) => (/^[A-Z]{2,}$/.test(w) ? w : w.toLowerCase())).join(" ");
   const fit = job.fit.slice(0, 3);
   const comment = (lead) => `${lead}\n${url}\n\nReferral link: I may earn a bonus if you're hired. Pay and openings as posted.`;
   const fix = (s) => s.replace(/\n{3,}/g, "\n\n").trim();
