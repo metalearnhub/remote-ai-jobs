@@ -304,5 +304,17 @@
     const h = location.hash.slice(1); if (h.startsWith('edit-')) { await refresh(); viewEdit(JOBS.find((x) => String(x.id) === h.slice(5))); } else tab(h || 'jobs');
   }
   
-  if (TOKEN) start(); else login();
+  // Opened from the CRM: swap the one-time pass in the URL for an admin session (no emailed code).
+  const SSO = /[#&]sso=([0-9a-f]{64})/.exec(location.hash);
+  if (SSO) {
+    try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
+    if (TOKEN) start();
+    else {
+      app.innerHTML = '<div class="adm"><p class="muted">Signing you in from your CRM…</p></div>';
+      fetch('https://qbubwemdvwflxvxwesrl.supabase.co/functions/v1/sso', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'redeem', app: 'jobs', pass: SSO[1] }) })
+        .then((r) => r.json().catch(() => ({})).then((d) => ({ ok: r.ok, d })))
+        .then((x) => { if (!x.ok || !x.d.token) throw new Error(x.d.error || 'Sign-in failed'); TOKEN = x.d.token; localStorage.setItem('rj_admin', TOKEN); start(); toast('Signed in from your CRM'); })
+        .catch((e) => { login(); const el = $('#le2'); if (el) { el.textContent = e.message + ' You can sign in with an emailed code instead.'; el.hidden = false; } });
+    }
+  } else if (TOKEN) start(); else login();
 })();
