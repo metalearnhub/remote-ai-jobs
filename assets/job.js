@@ -17,6 +17,7 @@
     return v && v.token && v.email ? v : null;
   }
   function save(v) {
+    if (window.RJ_SET_LEAD) return window.RJ_SET_LEAD(v);
     try { localStorage.setItem(KEY, JSON.stringify(v)); } catch (e) {}
     document.cookie = `${KEY}=${encodeURIComponent(JSON.stringify(v))}; Max-Age=${365 * 86400}; Path=/; SameSite=Lax; Secure`;
   }
@@ -32,7 +33,8 @@
     return d;
   }
   // count the view (fire and forget)
-  post({ action: 'view', slug, ref }).catch(() => {});
+  const by = () => (window.RJ_BY ? window.RJ_BY() : '');
+  post({ action: 'view', slug, ref, by: by() }).catch(() => {});
 
   const body = document.getElementById('passBody');
   function readyView(url) {
@@ -50,7 +52,8 @@
       const w = window.open('', '_blank');
       const btn = document.getElementById('instant'); btn.disabled = true; btn.textContent = 'Opening…';
       try {
-        const d = await post({ action: 'go', slug, token: v.token, ref });
+        const d = await post({ action: 'go', slug, token: v.token, ref, by: by() });
+        if (d.code && d.code !== v.code) save(Object.assign({}, v, { code: d.code }));
         if (w) { w.opener = null; w.location.href = d.url; } else location.href = d.url;
         readyView(d.url);
       } catch (e) {
@@ -73,8 +76,8 @@
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) { er.textContent = 'Enter a valid email address.'; er.hidden = false; return; }
     const btn = document.getElementById('go'); btn.disabled = true; btn.textContent = 'One moment…';
     try {
-      const d = await post({ action: 'capture', slug, email, alerts: document.getElementById('alerts').checked, website: document.getElementById('website').value, ref });
-      save({ token: d.token, email });
+      const d = await post({ action: 'capture', slug, email, alerts: document.getElementById('alerts').checked, website: document.getElementById('website').value, ref, by: by() });
+      save({ token: d.token, email, code: d.code });
       if (d.url) readyView(d.url);
       else body.innerHTML = `<div class="ready"><div class="ok"><i>✓</i> You're on the list</div><p class="muted small">${document.getElementById('alerts').checked ? 'Check your inbox for the free guide. I\'ll email you when a role like this opens.' : 'Saved.'}</p><a class="btn ghost block" href="/">See open roles</a></div>`;
     } catch (e) {

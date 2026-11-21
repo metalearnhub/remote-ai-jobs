@@ -44,6 +44,10 @@ function wrap(inner: string, unsub: string) {
 }
 
 // ---------- public ----------
+// Sharer codes: every lead gets a 6-character code; links they share carry ?by=CODE so sign-ups can be traced to them.
+const CODE = /^[A-HJ-NP-Z2-9]{6}$/;
+const byCode = (b: any) => { const c = String(b.by || "").trim().toUpperCase(); return CODE.test(c) ? c : null; };
+
 async function capture(req: Request, b: any) {
   if (b.website) return j({ ok: true }); // honeypot
   const email = String(b.email || "").trim().toLowerCase();
@@ -52,14 +56,18 @@ async function capture(req: Request, b: any) {
   const alerts = !!b.alerts;
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0] || null;
   const ua = (req.headers.get("user-agent") || "").slice(0, 300);
-  const { data: ex } = await db.from("rj_leads").select("id,token,alerts").eq("email", email).maybeSingle();
+  const by = byCode(b);
+  const { data: ex } = await db.from("rj_leads").select("id,token,alerts,ref_code,referred_by").eq("email", email).maybeSingle();
   let lead = ex;
   if (!ex) {
-    const { data, error } = await db.from("rj_leads").insert({ email, alerts, consent_text: alerts ? CONSENT : "Entered email to view the application link.", first_job: SLUG.test(slug) ? slug : null, source: String(b.ref || "web").slice(0, 80), ip, user_agent: ua }).select("id,token,alerts").single();
+    const { data, error } = await db.from("rj_leads").insert({ email, alerts, consent_text: alerts ? CONSENT : "Entered email to view the application link.", first_job: SLUG.test(slug) ? slug : null, source: String(b.ref || "web").slice(0, 80), ip, user_agent: ua, referred_by: by }).select("id,token,alerts,ref_code,referred_by").single();
     if (error) return j({ error: "Could not save your email right now." }, 500);
     lead = data;
-  } else if (alerts && !ex.alerts) {
-    await db.from("rj_leads").update({ alerts: true, consent_text: CONSENT, updated_at: new Date().toISOString() }).eq("id", ex.id);
+  } else {
+    const upd: any = {};
+    if (alerts && !ex.alerts) Object.assign(upd, { alerts: true, consent_text: CONSENT });
+    if (by && !ex.referred_by && by !== ex.ref_code) upd.referred_by = by;
+    if (Object.keys(upd).length) await db.from("rj_leads").update({ ...upd, updated_at: new Date().toISOString() }).eq("id", ex.id);
   }
   let newlyAlerted = false;
   if (alerts) newlyAlerted = await subscribeAlerts(email, ip, ua);
@@ -69,7 +77,7 @@ async function capture(req: Request, b: any) {
     if (job && job.status === "live" && job.referral_url) {
       url = job.referral_url;
       await db.from("rj_jobs").update({ applies: job.applies + 1 }).eq("id", job.id);
-      await db.from("rj_events").insert({ job_slug: slug, lead_id: lead!.id, kind: "apply", ref: String(b.ref || "").slice(0, 80) || null });
+      await db.from("rj_events").insert({ job_slug: slug, lead_id: lead!.id, kind: "apply", ref: String(b.ref || "").slice(0, 80) || null, by_code: by && by !== lead!.ref_code ? by : null });
     }
   }
   if (newlyAlerted) {
@@ -77,7 +85,7 @@ async function capture(req: Request, b: any) {
     // @ts-ignore EdgeRuntime is provided by Supabase
     if (typeof EdgeRuntime !== "undefined") EdgeRuntime.waitUntil(w); else await w;
   }
-  return j({ ok: true, token: lead!.token, url });
+  return j({ ok: true, token: lead!.token, code: lead!.ref_code, url });
 }
 
 // Adds the job-alerts tag in the shared newsletter list. Returns true if this is a new opt-in.
@@ -112,13 +120,14 @@ async function welcome(email: string, slug: string) {
 async function go(b: any) {
   const slug = String(b.slug || ""), token = String(b.token || "");
   if (!SLUG.test(slug) || !/^[0-9a-f-]{36}$/.test(token)) return j({ error: "bad request" }, 400);
-  const { data: lead } = await db.from("rj_leads").select("id").eq("token", token).maybeSingle();
+  const { data: lead } = await db.from("rj_leads").select("id,ref_code").eq("token", token).maybeSingle();
   if (!lead) return j({ error: "unknown", reset: true }, 404);
+  const by = byCode(b);
   const { data: job } = await db.from("rj_jobs").select("id,referral_url,status,applies").eq("slug", slug).maybeSingle();
   if (!job || job.status !== "live" || !job.referral_url) return j({ error: "This role is closed." }, 410);
   await db.from("rj_jobs").update({ applies: job.applies + 1 }).eq("id", job.id);
-  await db.from("rj_events").insert({ job_slug: slug, lead_id: lead.id, kind: "apply", ref: String(b.ref || "").slice(0, 80) || null });
-  return j({ ok: true, url: job.referral_url });
+  await db.from("rj_events").insert({ job_slug: slug, lead_id: lead.id, kind: "apply", ref: String(b.ref || "").slice(0, 80) || null, by_code: by && by !== lead.ref_code ? by : null });
+  return j({ ok: true, url: job.referral_url, code: lead.ref_code });
 }
 
 // ---------- taxonomy: domains + canonical major skills ----------
@@ -382,10 +391,14 @@ async function admin(b: any, email: string) {
     return j({ ok: true });
   }
   if (a === "leads") {
-    const { data, error } = await db.from("rj_leads").select("email,alerts,first_job,source,created_at").order("created_at", { ascending: false }).limit(2000);
+    const { data, error } = await db.from("rj_leads").select("email,alerts,first_job,source,created_at,ref_code,referred_by").order("created_at", { ascending: false }).limit(2000);
     if (error) return j({ error: error.message }, 500);
     const { count } = await db.from("nl_subscribers").select("id", { count: "exact", head: true }).contains("tags", ["job-alerts"]).eq("status", "subscribed");
-    return j({ leads: data, alert_subscribers: count || 0 });
+    // Per-sharer activity: page visits and apply clicks that came through links carrying their code.
+    const { data: ev } = await db.from("rj_events").select("by_code,kind").not("by_code", "is", null).limit(20000);
+    const shares: Record<string, { views: number; applies: number }> = {};
+    for (const e of ev || []) { const k = (e as any).by_code; shares[k] = shares[k] || { views: 0, applies: 0 }; if ((e as any).kind === "apply") shares[k].applies++; else shares[k].views++; }
+    return j({ leads: data, alert_subscribers: count || 0, shares });
   }
   if (a === "alert_start") {
     const slugs = (Array.isArray(b.slugs) ? b.slugs : []).filter((s: string) => SLUG.test(s)).slice(0, 5);
@@ -488,10 +501,16 @@ Deno.serve(async (req) => {
     try { b = JSON.parse((await req.text()).slice(0, 300000)); } catch { return j({ error: "bad json" }, 400); }
     if (b.action === "capture") return await capture(req, b);
     if (b.action === "go") return await go(b);
+    if (b.action === "code" && b.token) {
+      const token = String(b.token || "");
+      if (!/^[0-9a-f-]{36}$/.test(token)) return j({ error: "bad request" }, 400);
+      const { data: l } = await db.from("rj_leads").select("ref_code").eq("token", token).maybeSingle();
+      return l ? j({ code: l.ref_code }) : j({ error: "unknown", reset: true }, 404);
+    }
     if (b.action === "view") {
       const slug = String(b.slug || "");
       if (SLUG.test(slug)) {
-        await db.from("rj_events").insert({ job_slug: slug, kind: "view", ref: String(b.ref || "").slice(0, 80) || null });
+        await db.from("rj_events").insert({ job_slug: slug, kind: "view", ref: String(b.ref || "").slice(0, 80) || null, by_code: byCode(b) });
         const { data: jb } = await db.from("rj_jobs").select("id,views").eq("slug", slug).maybeSingle();
         if (jb) await db.from("rj_jobs").update({ views: jb.views + 1 }).eq("id", jb.id);
       }

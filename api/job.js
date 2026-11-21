@@ -86,7 +86,7 @@ function render(j) {
 </main>
 ${closed ? '' : `<div class="mobile-cta"><b>${esc(j.pay_text || '')}</b><a class="btn primary" href="#pass">Apply now</a></div>`}
 ${FOOT}
-<script>window.RJ_FN=${JSON.stringify(FN)};</script><script src="/assets/job.js?v=202611180849" defer></script><script src="/assets/share.js?v=202611211250" defer></script>`;
+<script>window.RJ_FN=${JSON.stringify(FN)};</script><script src="/assets/share.js?v=202611211330" defer></script><script src="/assets/job.js?v=202611211330" defer></script>`;
   const crumbs = `<script type="application/ld+json">${JSON.stringify({ '@context': 'https://schema.org', '@type': 'BreadcrumbList', itemListElement: [{ '@type': 'ListItem', position: 1, name: 'Open roles', item: SITE + '/' }, { '@type': 'ListItem', position: 2, name: j.domain || 'Role', item: `${SITE}/?d=${encodeURIComponent(j.domain || '')}` }, { '@type': 'ListItem', position: 3, name: j.title, item: url }] }).replace(/</g, '\\u003c')}</script>`;
   const v = encodeURIComponent(String(j.updated_at || '').replace(/\D/g, '').slice(0, 12));
   return shell({ title: `${j.title}${j.pay_text ? ` (${j.pay_text})` : ''} · Remote AI Work`, desc, url, body, jsonld: jsonld + crumbs, image: `${SITE}/og/${j.slug}.png${v ? '?v=' + v : ''}`, alt: `${j.title}${j.pay_text ? ', ' + j.pay_text + ' as posted' : ''}` });

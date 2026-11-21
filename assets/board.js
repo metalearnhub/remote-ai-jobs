@@ -13,7 +13,7 @@
     if (v) { shareBtn.dataset.url = location.origin + '/c/' + slugify(v); shareBtn.dataset.title = 'Remote AI roles in ' + v; }
   }
   if (shareBtn) shareBtn.addEventListener('click', async () => {
-    const url = shareBtn.dataset.url, title = shareBtn.dataset.title;
+    const url = window.RJ_LINK ? window.RJ_LINK(shareBtn.dataset.url, 'share-list') : shareBtn.dataset.url, title = shareBtn.dataset.title;
     try { if (navigator.share && matchMedia('(pointer: coarse)').matches) { await navigator.share({ title, url }); return; } } catch (e) { if (e && e.name === 'AbortError') return; }
     try { await navigator.clipboard.writeText(url); } catch (e) { window.prompt('Copy this link:', url); return; }
     const t = shareBtn.textContent; shareBtn.textContent = 'Link copied ✓'; setTimeout(() => (shareBtn.textContent = t), 1600);
@@ -66,12 +66,11 @@
     if (!document.getElementById('alerts').checked) { er.textContent = 'Tick the box so I can send you alerts.'; er.hidden = false; return; }
     const b = document.getElementById('subBtn'); b.disabled = true; b.textContent = 'One moment…';
     try {
-      const r = await fetch(FN, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'capture', email, alerts: true, website: document.getElementById('website').value, ref: new URLSearchParams(location.search).get('ref') || (CAT ? 'c-' + CAT.slug : 'board') }) });
+      const r = await fetch(FN, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'capture', email, alerts: true, website: document.getElementById('website').value, ref: new URLSearchParams(location.search).get('ref') || (CAT ? 'c-' + CAT.slug : 'board'), by: window.RJ_BY ? window.RJ_BY() : '' }) });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || 'Something went wrong.');
-      const v = JSON.stringify({ token: d.token, email });
-      try { localStorage.setItem('rj_lead', v); } catch (x) {}
-      document.cookie = `rj_lead=${encodeURIComponent(v)}; Max-Age=${365 * 86400}; Path=/; SameSite=Lax; Secure`;
+      const v = JSON.stringify({ token: d.token, email, code: d.code });
+      if (window.RJ_SET_LEAD) window.RJ_SET_LEAD({ token: d.token, email, code: d.code }); else { try { localStorage.setItem('rj_lead', v); } catch (x) {} document.cookie = `rj_lead=${encodeURIComponent(v)}; Max-Age=${365 * 86400}; Path=/; SameSite=Lax; Secure`; }
       f.innerHTML = '<b>You\'re on the list ✓</b><span class="muted small">Check your inbox for the free guide. Any role page now opens with one click.</span><a class="btn ghost block" href="/guide">Open the guide now</a>';
     } catch (x) { b.disabled = false; b.textContent = 'Send me alerts'; er.textContent = x.message; er.hidden = false; }
   });

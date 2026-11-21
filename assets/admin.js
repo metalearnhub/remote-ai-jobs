@@ -294,13 +294,22 @@
   async function viewLeads() {
     app.innerHTML = '<div class="adm"><p class="muted">Loading…</p></div>';
     const d = await api({ action: 'leads' });
-    const L = d.leads || [];
+    const L = d.leads || [], SH = d.shares || {};
+    const byCode = {}; L.forEach((x) => { if (x.ref_code) byCode[x.ref_code] = x; });
+    const joined = {}; L.forEach((x) => { if (x.referred_by) joined[x.referred_by] = (joined[x.referred_by] || 0) + 1; });
+    const codes = Array.from(new Set([...Object.keys(SH), ...Object.keys(joined)]));
+    const top = codes.map((c) => ({ c, who: byCode[c] ? byCode[c].email : '(unknown code)', views: (SH[c] || {}).views || 0, applies: (SH[c] || {}).applies || 0, joined: joined[c] || 0 })).sort((a, b) => b.joined - a.joined || b.applies - a.applies || b.views - a.views);
+    const refBy = (x) => x.referred_by ? `${esc(byCode[x.referred_by] ? byCode[x.referred_by].email : '')} <span class="muted">${esc(x.referred_by)}</span>` : '—';
     app.innerHTML = `<div class="adm"><div class="row between"><h1>Leads</h1><button class="btn ghost sm" id="csv">Export CSV</button></div>
       <div class="stats"><div><b>${L.length}</b><span>emails captured</span></div><div><b>${L.filter((x) => x.alerts).length}</b><span>opted in here</span></div><div><b>${d.alert_subscribers}</b><span>active alert subscribers</span></div><div><b>${L.filter((x) => Date.now() - Date.parse(x.created_at) < 7 * 864e5).length}</b><span>last 7 days</span></div></div>
-      <div class="panel" style="overflow-x:auto" tabindex="0" aria-label="Leads table"><table class="t"><tr><th>Email</th><th>Alerts</th><th class="hm">First role</th><th class="hm">Source</th><th>Date</th></tr>
-      ${L.slice(0, 500).map((x) => `<tr><td>${esc(x.email)}</td><td>${x.alerts ? '✓' : '—'}</td><td class="hm">${esc(x.first_job || '')}</td><td class="hm">${esc(x.source || '')}</td><td>${esc(x.created_at.slice(0, 10))}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">No leads yet.</td></tr>'}</table></div></div>`;
+      <h2>Top sharers</h2><p class="muted small">Every lead has a sharer code. Links they share (share icons, copy, Share this list) carry <code>?by=CODE</code>. Visits and apply clicks come from those links; "joined" is people who left their email after arriving through one. Cross-check the joined emails with your micro1 referrals.</p>
+      <div class="panel" style="overflow-x:auto" tabindex="0" aria-label="Top sharers"><table class="t"><tr><th>Sharer</th><th>Code</th><th>Visits</th><th>Apply clicks</th><th>Joined</th></tr>
+      ${top.slice(0, 100).map((t) => `<tr><td>${esc(t.who)}</td><td><code>${esc(t.c)}</code></td><td>${t.views}</td><td>${t.applies}</td><td><b>${t.joined}</b></td></tr>`).join('') || '<tr><td colspan="5" class="muted">No shared visits yet.</td></tr>'}</table></div>
+      <h2>All leads</h2>
+      <div class="panel" style="overflow-x:auto" tabindex="0" aria-label="Leads table"><table class="t"><tr><th>Email</th><th>Code</th><th>Referred by</th><th>Alerts</th><th class="hm">First role</th><th class="hm">Source</th><th>Date</th></tr>
+      ${L.slice(0, 500).map((x) => `<tr><td>${esc(x.email)}</td><td><code>${esc(x.ref_code || '')}</code></td><td>${refBy(x)}</td><td>${x.alerts ? '✓' : '—'}</td><td class="hm">${esc(x.first_job || '')}</td><td class="hm">${esc(x.source || '')}</td><td>${esc(x.created_at.slice(0, 10))}</td></tr>`).join('') || '<tr><td colspan="7" class="muted">No leads yet.</td></tr>'}</table></div></div>`;
     $('#csv').onclick = () => {
-      const rows = [['email', 'alerts', 'first_job', 'source', 'created_at'], ...L.map((x) => [x.email, x.alerts, x.first_job || '', x.source || '', x.created_at])];
+      const rows = [['email', 'ref_code', 'referred_by_code', 'referred_by_email', 'alerts', 'first_job', 'source', 'created_at'], ...L.map((x) => [x.email, x.ref_code || '', x.referred_by || '', x.referred_by && byCode[x.referred_by] ? byCode[x.referred_by].email : '', x.alerts, x.first_job || '', x.source || '', x.created_at])];
       const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n')], { type: 'text/csv' })); a.download = 'remote-ai-work-leads.csv'; a.click();
     };
   }
