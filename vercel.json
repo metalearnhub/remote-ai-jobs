@@ -71,7 +71,7 @@
   ],
   "functions": {
     "api/og.js": {
-      "includeFiles": "{api/_fonts/**,assets/icon.svg,api/cat.js,api/job.js}",
+      "includeFiles": "{api/_fonts/**,assets/icon.svg,api/cat.js,api/job.js,api/_share.js}",
       "memory": 1024
     }
   }
