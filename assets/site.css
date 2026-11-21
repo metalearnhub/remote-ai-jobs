@@ -204,4 +204,6 @@ footer.foot a { color: var(--ink-2); }
 .n-copy { --c: var(--accent); color: var(--accent-ink); } .n-copy.ok { --c: var(--pay); }
 .n-facebook { --c: #1877F2; } .n-messenger { --c: #A033FF; } .n-whatsapp { --c: #1FAF54; } .n-viber { --c: #7360F2; } .n-threads { --c: #000; } .n-x { --c: #000; } .n-linkedin { --c: #0A66C2; } .n-telegram { --c: #1C93D1; } .n-email { --c: #5F6670; } .n-more { --c: var(--sunk); color: var(--ink); }
 @media (prefers-color-scheme: dark) { .n-threads, .n-x { --c: #ECEFF4; color: #0F1115; } }
-.shint { color: var(--pay); font-weight: 600; min-height: 1.4em; margin: 8px 0 0; }
+.stoast { position: fixed; left: 50%; bottom: 22px; transform: translate(-50%, 20px); max-width: min(92vw, 460px); background: var(--ink); color: var(--paper); padding: 12px 18px; border-radius: 14px; font-weight: 600; font-size: .95rem; line-height: 1.4; box-shadow: 0 10px 30px rgba(0,0,0,.25); opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s; z-index: 60; text-align: center; }
+.stoast.on { opacity: 1; transform: translate(-50%, 0); }
+body.has-cta .stoast { bottom: 88px; }

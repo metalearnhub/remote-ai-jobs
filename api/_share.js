@@ -21,7 +21,7 @@ const withRef = (url, net) => `${url}${url.includes('?') ? '&' : '?'}ref=share-$
 function href(net, url, text) {
   const u = encodeURIComponent(withRef(url, net)), t = encodeURIComponent(text), tu = encodeURIComponent(`${text}\n${withRef(url, net)}`);
   return {
-    facebook: `https://www.facebook.com/sharer/sharer.php?u=${u}&quote=${t}`,
+    facebook: `https://www.facebook.com/sharer/sharer.php?u=${u}`,
     messenger: `fb-messenger://share/?link=${u}`,
     whatsapp: `https://wa.me/?text=${tu}`,
     viber: `viber://forward?text=${tu}`,
@@ -41,7 +41,6 @@ function block({ url, heading, msgs }) {
     ${NETS.map(([k, label, mode, mob, g]) => `<a class="si n-${k}" data-net="${k}"${mob ? ' data-mobile hidden' : ''} href="${esc(href(k, url, msgs[mode]))}" target="_blank" rel="noopener nofollow" title="Share on ${label}" aria-label="Share on ${label}">${g}</a>`).join('')}
     <button type="button" class="si n-more" data-native hidden title="More apps" aria-label="Share with another app">${MORE}</button>
   </div>
-  <p class="shint small" role="status" aria-live="polite"></p>
 </section>`;
 }
 module.exports = { block, href, NETS };

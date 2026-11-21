@@ -9,12 +9,12 @@ const li = (a) => (a || []).map((x) => `<li>${esc(x)}</li>`).join('');
 function shell({ title, desc, url, body, robots = 'index,follow', jsonld = '', image = `${SITE}/assets/og.png`, alt = 'Remote AI Work: remote AI roles, pay as posted' }) {
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${esc(title)}</title><meta name="description" content="${esc(desc)}"><meta name="robots" content="${robots}">
-<link rel="canonical" href="${esc(url)}"><meta property="og:type" content="website"><meta property="og:site_name" content="Remote AI Work"><meta property="og:locale" content="en_US">
+<link rel="canonical" href="${esc(url)}"><meta property="og:type" content="website"><meta property="og:image:type" content="image/png"><meta property="og:site_name" content="Remote AI Work"><meta property="og:locale" content="en_US">
 <meta property="og:title" content="${esc(title)}"><meta property="og:description" content="${esc(desc)}"><meta property="og:url" content="${esc(url)}">
 <meta property="og:image" content="${esc(image)}"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:alt" content="${esc(alt)}">
 <meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="${esc(title)}"><meta name="twitter:description" content="${esc(desc)}"><meta name="twitter:image" content="${esc(image)}"><meta name="twitter:image:alt" content="${esc(alt)}">
 <meta name="theme-color" content="#4B2EE8"><link rel="icon" href="/assets/icon.svg" type="image/svg+xml"><link rel="icon" href="/assets/favicon-32.png" sizes="32x32" type="image/png"><link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
-<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="/assets/site.css?v=202611211205">${jsonld}</head>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="/assets/site.css?v=202611211250">${jsonld}</head>
 <body>${body}</body></html>`;
 }
 
@@ -86,7 +86,7 @@ function render(j) {
 </main>
 ${closed ? '' : `<div class="mobile-cta"><b>${esc(j.pay_text || '')}</b><a class="btn primary" href="#pass">Apply now</a></div>`}
 ${FOOT}
-<script>window.RJ_FN=${JSON.stringify(FN)};</script><script src="/assets/job.js?v=202611180849" defer></script><script src="/assets/share.js?v=202611211205" defer></script>`;
+<script>window.RJ_FN=${JSON.stringify(FN)};</script><script src="/assets/job.js?v=202611180849" defer></script><script src="/assets/share.js?v=202611211250" defer></script>`;
   const crumbs = `<script type="application/ld+json">${JSON.stringify({ '@context': 'https://schema.org', '@type': 'BreadcrumbList', itemListElement: [{ '@type': 'ListItem', position: 1, name: 'Open roles', item: SITE + '/' }, { '@type': 'ListItem', position: 2, name: j.domain || 'Role', item: `${SITE}/?d=${encodeURIComponent(j.domain || '')}` }, { '@type': 'ListItem', position: 3, name: j.title, item: url }] }).replace(/</g, '\\u003c')}</script>`;
   const v = encodeURIComponent(String(j.updated_at || '').replace(/\D/g, '').slice(0, 12));
   return shell({ title: `${j.title}${j.pay_text ? ` (${j.pay_text})` : ''} · Remote AI Work`, desc, url, body, jsonld: jsonld + crumbs, image: `${SITE}/og/${j.slug}.png${v ? '?v=' + v : ''}`, alt: `${j.title}${j.pay_text ? ', ' + j.pay_text + ' as posted' : ''}` });
