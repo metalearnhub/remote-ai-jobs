@@ -85,3 +85,10 @@ tr.dup td { background: color-mix(in srgb, var(--warn) 8%, transparent); }
   .mlabel .btn, .mfoot .btn { min-height: 40px; }
   .mfoot .btn { flex: 1; }
 }
+
+.catrow { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
+.catrow:first-of-type { border-top: 0; }
+.cat-n { display: flex; flex-direction: column; min-width: 0; }
+.cat-n a { word-break: break-all; }
+.cat-b { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+@media (max-width: 560px) { .catrow { flex-direction: column; align-items: stretch; } .cat-b { justify-content: stretch; } .cat-b .btn { flex: 1; } }

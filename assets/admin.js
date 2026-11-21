@@ -45,6 +45,22 @@
   window.addEventListener('hashchange', () => { const h = location.hash.slice(1); if (h.startsWith('edit-')) viewEdit(JOBS.find((x) => String(x.id) === h.slice(5))); else tab(h || 'jobs'); });
   async function refresh() { const d = await api({ action: 'jobs' }); JOBS = d.jobs || []; SITE = d.site || SITE; }
   const pageUrl = (j, ch) => `${SITE}/j/${j.slug}${ch ? '?ref=' + encodeURIComponent(ch) : ''}`;
+  const catSlug = (s) => String(s || '').toLowerCase().replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80);
+  const catUrl = (name, ch) => `${SITE}/c/${catSlug(name)}${ch ? '?ref=' + encodeURIComponent(ch) : ''}`;
+  const tagsOf = (j) => (j.tags && j.tags.length ? j.tags : (j.skills || []).slice(0, 3));
+  // Fields and major skills with live roles, for the shareable category pages (/c/<slug>).
+  function cats() {
+    const live = JOBS.filter((j) => j.status === 'live');
+    const by = (key) => { const m = {}; live.forEach((j) => [].concat(key(j)).forEach((k) => { if (k) (m[k] = m[k] || []).push(j); })); return Object.entries(m).map(([name, jobs]) => ({ name, jobs })).sort((a, b) => b.jobs.length - a.jobs.length || a.name.localeCompare(b.name)); };
+    return { fields: by((j) => j.domain), skills: by(tagsOf).filter((c) => c.jobs.length > 1) };
+  }
+  // A ready post for a community group: who it's for, what's open, the one link, and the referral disclosure.
+  function catPost(c, ch) {
+    const n = c.jobs.length;
+    const list = c.jobs.slice(0, 4).map((j) => `• ${j.title}${j.pay_text ? ' (' + j.pay_text + ')' : ''}`).join('\n');
+    const low = String(c.name).split(' ').map((w) => (/^[A-Z][a-z]/.test(w) ? w.toLowerCase() : w)).join(' ');
+    return `For people with ${low} experience: AI labs are paying people with your background to train and test their models, fully remote.\n\nI keep one page with every open ${low} role, explained in plain words with pay as posted. ${n === 1 ? '1 role is' : n + ' roles are'} open now:\n${list}${n > 4 ? '\n…and ' + (n - 4) + ' more' : ''}\n\nSee them all here: ${catUrl(c.name, ch)}\n\nNew roles get added to the same link, so it's worth saving. (Independent page, not the hiring platform. I'm a referral partner and may earn a bonus if you're hired. Applying is free.)`;
+  }
 
   async function viewJobs() {
     app.innerHTML = '<div class="adm"><p class="muted">Loading…</p></div>';
@@ -76,7 +92,7 @@
     const m = document.createElement('div');
     m.className = 'modal'; m.setAttribute('role', 'dialog'); m.setAttribute('aria-modal', 'true'); m.setAttribute('aria-labelledby', 'mh');
     m.innerHTML = `<div class="sheet"><div class="mhead"><div><b id="mh">${esc(j.title)}</b><span class="muted small">${esc(j.pay_text || '')} · ${esc(j.domain || '')}</span></div><button class="x" aria-label="Close">✕</button></div>
-      <div class="mbar"><button class="btn primary sm" data-all>Copy all 3 posts</button><button class="btn ghost sm" data-sel>Copy ticked</button><button class="btn ghost sm" data-link>Copy page link</button></div>
+      <div class="mbar"><button class="btn primary sm" data-all>Copy all 3 posts</button><button class="btn ghost sm" data-sel>Copy ticked</button><button class="btn ghost sm" data-link>Copy page link</button>${j.domain ? `<button class="btn ghost sm" data-cat>Copy ${esc(j.domain)} list link</button>` : ''}</div>
       <div class="mbody">${j.threads.map((p, i) => `<div class="mpost">
         <div class="row between"><label class="check"><input type="checkbox" data-pick="${i}" checked> <b>${esc(p.angle || 'Post ' + (i + 1))}</b></label><span class="pill">Topic: ${esc(p.tag || 'Remote Jobs')}</span></div>
         <div class="mlabel"><span>1 · Post <span class="muted">${p.text.length}/500</span></span><button class="btn primary sm" data-c="text" data-i="${i}">Copy post</button></div><pre class="mtext">${esc(p.text)}</pre>
@@ -92,6 +108,7 @@
       else if ('all' in b.dataset) { await copy(j.threads.map(both).join(SEP)); flash(b); }
       else if ('sel' in b.dataset) { const pick = $$('[data-pick]:checked', m).map((x) => j.threads[+x.dataset.pick]); if (!pick.length) return toast('Tick at least one post'); await copy(pick.map(both).join(SEP)); flash(b); }
       else if ('link' in b.dataset) { await copy(url); flash(b); }
+      else if ('cat' in b.dataset) { await copy(catUrl(j.domain)); flash(b); }
       else if (b.dataset.posted != null) { const i = +b.dataset.posted; j.threads[i].posted = j.threads[i].posted ? null : new Date().toISOString().slice(0, 10); b.textContent = j.threads[i].posted ? '✓ Posted ' + j.threads[i].posted : 'Mark posted'; try { await api({ action: 'save', job: Object.assign({}, j) }); } catch (x) { toast(x.message); } }
     });
     document.addEventListener('keydown', onKey);
@@ -205,12 +222,25 @@
       <label class="f">Format<select id="fmt"><option value="full">Title · pay · link</option><option value="md">Markdown</option><option value="url">Links only</option><option value="ref">Raw referral links (private)</option></select></label>
       <div class="row" style="align-items:end"><button class="btn primary" id="cp">Copy all</button></div></div>
       <textarea id="out" class="big" style="margin-top:12px" readonly aria-label="Links to copy"></textarea>
-      <p class="muted small">Share your page links (they capture the email first). Raw referral links skip your capture page; keep them for direct one-to-one sharing.</p></div></div>`;
+      <p class="muted small">Share your page links (they capture the email first). Raw referral links skip your capture page; keep them for direct one-to-one sharing.</p></div>
+      <h2 style="margin-top:28px">Category links</h2><p class="muted">One link per field or skill for a community: a music group sees only the music roles, and new roles appear on the same link automatically. The channel tag above is added to these links too.</p>
+      <div class="panel" id="cats"></div></div>`;
     const draw = () => {
       const ch = $('#ch').value.trim(), f = $('#fmt').value;
       $('#out').value = live.map((j) => f === 'md' ? `- [${j.title}](${pageUrl(j, ch)}) — ${j.pay_text || ''}` : f === 'url' ? pageUrl(j, ch) : f === 'ref' ? `${j.title}: ${j.referral_url}` : `${j.title} · ${j.pay_text || 'pay as posted'} · ${pageUrl(j, ch)}`).join('\n') || 'No live jobs yet.';
     };
-    $('#ch').oninput = draw; $('#fmt').onchange = draw; $('#cp').onclick = () => copy($('#out').value); draw();
+    const C = cats();
+    const row = (c, k, i) => `<div class="catrow"><div class="cat-n"><b>${esc(c.name)}</b><span class="muted small">${c.jobs.length} open · <a href="${esc(catUrl(c.name))}" target="_blank" rel="noopener">/c/${esc(catSlug(c.name))}</a></span></div>
+        <div class="cat-b"><button class="btn primary sm" data-cl="${k}${i}">Copy link</button><button class="btn ghost sm" data-cp="${k}${i}">Copy group post</button></div></div>`;
+    const drawCats = () => {
+      $('#cats').innerHTML = C.fields.length ? `<h3 class="small muted" style="margin:0 0 6px">Fields</h3>${C.fields.map((c, i) => row(c, 'f', i)).join('')}${C.skills.length ? `<h3 class="small muted" style="margin:16px 0 6px">Major skills (2+ roles)</h3>${C.skills.map((c, i) => row(c, 's', i)).join('')}` : ''}` : '<p class="muted">No live jobs yet.</p>';
+    };
+    $('#cats').onclick = async (e) => {
+      const b = e.target.closest('button'); if (!b) return;
+      const key = b.dataset.cl || b.dataset.cp; const c = (key[0] === 'f' ? C.fields : C.skills)[+key.slice(1)];
+      await copy(b.dataset.cl ? catUrl(c.name, $('#ch').value.trim()) : catPost(c, $('#ch').value.trim())); flash(b);
+    };
+    $('#ch').oninput = draw; $('#fmt').onchange = draw; $('#cp').onclick = () => copy($('#out').value); draw(); drawCats();
   }
 
   async function viewThreads() {

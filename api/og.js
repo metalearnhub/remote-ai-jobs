@@ -47,9 +47,35 @@ function card(j) {
   ]);
 }
 
+// Category share image (/og/c-<slug>.png): field name, how many roles are open, and the first few titles.
+function catCard(c) {
+  const name = String(c.name || 'Remote AI roles');
+  const n = c.jobs.length;
+  const size = name.length > 28 ? 58 : name.length > 16 ? 70 : 84;
+  const titles = c.jobs.slice(0, 3).map((j) => String(j.title || ''));
+  return h('div', { width: '1200px', height: '630px', background: '#F4F5F7', fontFamily: 'Schibsted', padding: '48px', color: '#13161B' }, [
+    h('div', { flex: 1, background: '#FFFFFF', border: '3px solid #13161B', borderRadius: '34px', overflow: 'hidden', boxShadow: '14px 14px 0 rgba(19,22,27,.09)' }, [
+      h('div', { flex: 1, flexDirection: 'column', padding: '44px 48px', justifyContent: 'space-between' }, [
+        h('div', { alignItems: 'center', gap: '14px', fontSize: '28px', fontWeight: 800 }, [{ type: 'img', props: { src: logo(), width: 56, height: 56 } }, 'Remote AI Work']),
+        h('div', { flexDirection: 'column', gap: '14px' }, [
+          h('div', { fontSize: '30px', fontWeight: 500, color: '#555C67' }, 'Remote AI roles in'),
+          h('div', { fontSize: `${size}px`, fontWeight: 800, lineHeight: 1.02, letterSpacing: '-2px', color: '#4B2EE8' }, name),
+          h('div', { flexDirection: 'column', gap: '6px', marginTop: '8px' }, titles.map((t) => h('div', { fontSize: '24px', fontWeight: 500, color: '#3A404A' }, '• ' + (t.length > 46 ? t.slice(0, 45).replace(/\s+\S*$/, '') + '…' : t)))),
+        ]),
+        h('div', { fontSize: '22px', color: '#555C67', fontWeight: 500 }, 'jobs.dijaedadula.com · independent page · referral links'),
+      ]),
+      h('div', { width: '340px', background: '#13161B', color: '#F4F5F7', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', padding: '40px', gap: '6px' }, [
+        h('div', { fontSize: '150px', fontWeight: 800, color: '#7CE0B2', lineHeight: 1, letterSpacing: '-4px' }, String(n)),
+        h('div', { fontSize: '30px', fontWeight: 800 }, n === 1 ? 'open role' : 'open roles'),
+        h('div', { fontSize: '22px', opacity: 0.65, fontWeight: 500, marginTop: '18px', textAlign: 'center' }, 'Pay as posted'),
+      ]),
+    ]),
+  ]);
+}
+
 async function render(j) {
   const { ImageResponse } = await import('@vercel/og');
-  const r = new ImageResponse(card(j), { width: 1200, height: 630, fonts: await fonts() });
+  const r = new ImageResponse(j && j.__cat ? catCard(j) : card(j), { width: 1200, height: 630, fonts: await fonts() });
   return Buffer.from(await r.arrayBuffer());
 }
 
@@ -57,9 +83,18 @@ module.exports = async (req, res) => {
   const slug = String((req.query && req.query.slug) || '').replace(/\.png$/, '');
   try {
     if (!/^[a-z0-9-]{2,90}$/.test(slug)) throw new Error('bad slug');
-    const d = await (await fetch(`${FN}?a=job&slug=${encodeURIComponent(slug)}`)).json();
-    if (!d.job) throw new Error('not found');
-    const png = await render(d.job);
+    let png;
+    if (slug.startsWith('c-')) {
+      const { resolve } = require('./cat.js');
+      const d = await (await fetch(`${FN}?a=list`)).json();
+      const c = resolve(slug.slice(2), d.jobs || []);
+      if (!c) throw new Error('not found');
+      png = await render({ __cat: true, ...c });
+    } else {
+      const d = await (await fetch(`${FN}?a=job&slug=${encodeURIComponent(slug)}`)).json();
+      if (!d.job) throw new Error('not found');
+      png = await render(d.job);
+    }
     res.setHeader('Content-Type', 'image/png');
     res.setHeader('Cache-Control', 'public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800');
     res.end(png);
@@ -69,3 +104,4 @@ module.exports = async (req, res) => {
 };
 module.exports.render = render;
 module.exports.card = card;
+module.exports.catCard = catCard;

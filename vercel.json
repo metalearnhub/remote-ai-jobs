@@ -6,6 +6,10 @@
       "destination": "/api/og?slug=:file"
     },
     {
+      "source": "/c/:slug",
+      "destination": "/api/cat?slug=:slug"
+    },
+    {
       "source": "/j/:slug",
       "destination": "/api/job?slug=:slug"
     },
@@ -67,7 +71,7 @@
   ],
   "functions": {
     "api/og.js": {
-      "includeFiles": "{api/_fonts/**,assets/icon.svg}",
+      "includeFiles": "{api/_fonts/**,assets/icon.svg,api/cat.js,api/job.js}",
       "memory": 1024
     }
   }
