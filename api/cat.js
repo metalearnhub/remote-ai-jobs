@@ -51,7 +51,7 @@ function render(slug, c) {
   <div class="row between" style="align-items:baseline;gap:10px;flex-wrap:wrap"><h2 style="margin:0">${esc(label)}</h2><span class="row" style="gap:10px;align-items:center"><span class="muted small" id="count">${n} role${n === 1 ? '' : 's'}</span><button class="btn ghost sm" type="button" id="share" data-url="${esc(url)}" data-title="Remote AI roles in ${esc(c.name)}">Share this list</button></span></div>
   <div class="list" id="list">${c.jobs.map(cardHtml).join('')}</div>
   <p class="muted" style="margin-top:18px">Not your field? <a href="/">See all open roles</a>.</p>
-  <div style="margin-top:28px">${share.block({ url, heading: 'Share this list', sub: `Know people in ${c.name}? Post it in your feed or group, or send it in a DM. New roles show up on the same link.`, msgs: {
+  <div style="margin-top:28px">${share.block({ url, heading: 'Share this list', msgs: {
     feed: `Every open remote AI role in ${c.name}, on one page with pay as posted. Worth saving if this is your field 👇`,
     dm: `Hey, these remote AI roles in ${c.name} made me think of you. Worth a look?` } })}</div>
   <div class="steps3">
@@ -61,7 +61,7 @@ function render(slug, c) {
   </div>
 </main>
 ${FOOT}
-<script>window.RJ_FN=${JSON.stringify(FN)};window.RJ_CAT=${JSON.stringify({ k: c.kind, v: c.name, slug }).replace(/</g, '\\u003c')};</script><script src="/assets/board.js?v=202611211200" defer></script><script src="/assets/share.js?v=202611211140" defer></script>`;
+<script>window.RJ_FN=${JSON.stringify(FN)};window.RJ_CAT=${JSON.stringify({ k: c.kind, v: c.name, slug }).replace(/</g, '\\u003c')};</script><script src="/assets/board.js?v=202611211200" defer></script><script src="/assets/share.js?v=202611211205" defer></script>`;
   const ld = { '@context': 'https://schema.org', '@type': 'CollectionPage', name: `Remote AI roles in ${c.name}`, url, mainEntity: { '@type': 'ItemList', itemListElement: c.jobs.map((j, i) => ({ '@type': 'ListItem', position: i + 1, url: `${SITE}/j/${j.slug}`, name: j.title })) } };
   const crumbs = { '@context': 'https://schema.org', '@type': 'BreadcrumbList', itemListElement: [{ '@type': 'ListItem', position: 1, name: 'Open roles', item: SITE + '/' }, { '@type': 'ListItem', position: 2, name: c.name, item: url }] };
   const jsonld = [ld, crumbs].map((o) => `<script type="application/ld+json">${JSON.stringify(o).replace(/</g, '\\u003c')}</script>`).join('');

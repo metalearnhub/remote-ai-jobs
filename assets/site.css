@@ -194,20 +194,14 @@ footer.foot a { color: var(--ink-2); }
   .wrap { padding: 0 16px; }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
-/* Share block */
-.share { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-m); padding: 20px 22px; }
-.share h2 { margin-top: 0; }
-.share .seg { display: inline-flex; border: 1.5px solid var(--line); border-radius: 12px; padding: 3px; gap: 3px; margin: 4px 0 10px; }
-.share .seg button { border: 0; background: transparent; color: var(--ink-2); font: inherit; font-weight: 700; font-size: .92rem; padding: 8px 14px; border-radius: 9px; cursor: pointer; min-height: 38px; }
-.share .seg button[aria-selected="true"] { background: var(--ink); color: var(--paper); }
-.share .smsg { width: 100%; box-sizing: border-box; font: inherit; font-size: .98rem; line-height: 1.5; color: var(--ink); background: var(--paper); border: 1.5px solid var(--line); border-radius: 12px; padding: 12px 14px; resize: vertical; min-height: 84px; }
-.share .sact { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 14px; }
-.share .btn.ok { background: var(--pay); color: var(--surface); border-color: transparent; }
-.share .snets { display: flex; flex-wrap: wrap; gap: 8px; }
-.share .snet { display: inline-flex; align-items: center; min-height: 40px; padding: 8px 14px; border-radius: 99px; border: 1.5px solid var(--line); color: var(--ink); text-decoration: none; font-weight: 700; font-size: .9rem; background: var(--paper); }
-.share .snet:hover { border-color: var(--ink); }
-.share .snet[hidden] { display: none; }
-.share .snet::before { content: ''; width: 10px; height: 10px; border-radius: 50%; margin-right: 8px; background: var(--c, var(--accent)); }
-.n-facebook { --c: #1877F2; } .n-messenger { --c: #A334FA; } .n-whatsapp { --c: #25D366; } .n-viber { --c: #7360F2; } .n-threads { --c: currentColor; } .n-x { --c: currentColor; } .n-linkedin { --c: #0A66C2; } .n-telegram { --c: #229ED9; } .n-email { --c: #8A8F98; }
-.share .smuted { color: var(--pay); font-weight: 600; margin: 10px 0 0; }
-@media (max-width: 560px) { .share { padding: 16px; } .share .seg { display: flex; } .share .seg button { flex: 1; } .share .sact .btn { flex: 1 1 auto; } }
+/* Share row */
+.share h2 { font-size: 1.05rem; margin: 0 0 12px; }
+.sicons { display: flex; flex-wrap: wrap; gap: 10px; }
+.si { width: 46px; height: 46px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; color: #fff; background: var(--c); border: 0; cursor: pointer; text-decoration: none; padding: 0; transition: transform .12s ease; }
+.si:hover { transform: translateY(-2px); }
+.si[hidden] { display: none; }
+.si .sg { font-weight: 800; line-height: 1; font-family: var(--ui); }
+.n-copy { --c: var(--accent); color: var(--accent-ink); } .n-copy.ok { --c: var(--pay); }
+.n-facebook { --c: #1877F2; } .n-messenger { --c: #A033FF; } .n-whatsapp { --c: #1FAF54; } .n-viber { --c: #7360F2; } .n-threads { --c: #000; } .n-x { --c: #000; } .n-linkedin { --c: #0A66C2; } .n-telegram { --c: #1C93D1; } .n-email { --c: #5F6670; } .n-more { --c: var(--sunk); color: var(--ink); }
+@media (prefers-color-scheme: dark) { .n-threads, .n-x { --c: #ECEFF4; color: #0F1115; } }
+.shint { color: var(--pay); font-weight: 600; min-height: 1.4em; margin: 8px 0 0; }
