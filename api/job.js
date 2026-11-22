@@ -14,12 +14,12 @@ function shell({ title, desc, url, body, robots = 'index,follow', jsonld = '', i
 <meta property="og:image" content="${esc(image)}"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:alt" content="${esc(alt)}">
 <meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="${esc(title)}"><meta name="twitter:description" content="${esc(desc)}"><meta name="twitter:image" content="${esc(image)}"><meta name="twitter:image:alt" content="${esc(alt)}">
 <meta name="theme-color" content="#4B2EE8"><link rel="icon" href="/assets/icon.svg" type="image/svg+xml"><link rel="icon" href="/assets/favicon-32.png" sizes="32x32" type="image/png"><link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
-<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="/assets/site.css?v=202611211250">${jsonld}</head>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="/assets/site.css?v=202611220800">${jsonld}</head>
 <body>${body}</body></html>`;
 }
 
 const BAR = `<header class="bar"><div class="wrap"><a class="logo" href="/"><img src="/assets/icon.svg" alt="" width="34" height="34"><span>Remote AI Work<small>curated by Dijae Dadula</small></span></a>
-<nav aria-label="Main"><a href="/"><span class="hide-s">Open roles</span><span class="show-s">Roles</span></a><a href="/guide"><span class="hide-s">Free guide</span><span class="show-s">Guide</span></a><a class="hide-m" href="/privacy">Disclosure</a></nav></div></header>`;
+<nav aria-label="Main"><a href="/"><span class="hide-s">Open roles</span><span class="show-s">Roles</span></a><a href="/guide"><span class="hide-s">Free guide</span><span class="show-s">Guide</span></a><a class="hide-m" href="/privacy">Disclosure</a></nav></div></header><script src="/assets/nav.js?v=202611220800" defer></script>`;
 const FOOT = `<footer class="foot"><div class="wrap">Independent job page by Dijae Dadula. Not affiliated with, sponsored by or endorsed by micro1 or any employer. Some links are referral links, and I may earn a referral bonus if you're hired. Pay, openings and requirements are as posted and can change; nothing here guarantees an interview, placement or pay. <a href="/privacy">Privacy & disclosure</a> · <a href="/guide">Free guide</a></div></footer>`;
 
 function notFound() {

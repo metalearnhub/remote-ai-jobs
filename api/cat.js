@@ -39,6 +39,7 @@ function render(slug, c) {
       <p>AI labs hire people with real ${esc(lower(c.name))} experience to train and test their models. These are the ${n === 1 ? 'role' : `${n} roles`} open right now, explained in plain words. New ones get added to this page as they open.</p>
     </div>
     <form class="subbox" id="sub" novalidate>
+      <button type="button" class="sbtoggle" aria-expanded="false">🔔 New ${esc(c.name)} roles by email <i>Get alerts →</i></button>
       <b>Get the next ${esc(c.name)} role first</b>
       <span class="muted small">Instant alerts + my free guide to AI training work and the AI interview.</span>
       <input type="email" id="email" placeholder="you@email.com" autocomplete="email" aria-label="Email address" required>

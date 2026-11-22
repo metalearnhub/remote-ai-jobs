@@ -21,7 +21,7 @@
 
   // ---------- sign in ----------
   function login() {
-    $('#tabs').hidden = true;
+    $('#tabs').hidden = true; document.body.classList.add('signedout'); setTitle('Sign in');
     app.innerHTML = `<div class="adm"><form class="panel login" id="lf"><h1>Admin sign in</h1><p class="muted small">A 6-digit code goes to your email.</p>
       <input type="email" id="le" value="dijaedadula@gmail.com" autocomplete="email" aria-label="Admin email"><button class="btn primary" id="lb">Email me a code</button>
       <div id="lc" hidden><input type="text" inputmode="numeric" id="code" placeholder="6-digit code" maxlength="6" aria-label="6-digit code" autocomplete="one-time-code"><button class="btn primary block" style="margin-top:10px" type="button" id="lv">Sign in</button></div>
@@ -38,8 +38,11 @@
   }
 
   // ---------- views ----------
+  const LABEL = { jobs: 'Jobs', new: 'Add links', links: 'Links', threads: 'Threads', cats: 'Categories', leads: 'Leads', alerts: 'Alerts' };
+  function setTitle(t) { document.body.dataset.ttl = t; const el = document.getElementById('ttl'); if (el) el.textContent = t; }
   function tab(t) {
     $$('#tabs a').forEach((a) => a.classList.toggle('on', a.dataset.t === t));
+    setTitle(LABEL[t] || 'Jobs'); window.scrollTo(0, 0);
     ({ jobs: viewJobs, new: viewAdd, links: viewLinks, threads: viewThreads, cats: viewCats, leads: viewLeads, alerts: viewAlerts }[t] || viewJobs)();
   }
   window.addEventListener('hashchange', () => { const h = location.hash.slice(1); if (h.startsWith('edit-')) viewEdit(JOBS.find((x) => String(x.id) === h.slice(5))); else tab(h || 'jobs'); });
@@ -62,19 +65,31 @@
     return `For people with ${low} experience: AI labs are paying people with your background to train and test their models, fully remote.\n\nI keep one page with every open ${low} role, explained in plain words with pay as posted. ${n === 1 ? '1 role is' : n + ' roles are'} open now:\n${list}${n > 4 ? '\n…and ' + (n - 4) + ' more' : ''}\n\nSee them all here: ${catUrl(c.name, ch)}\n\nNew roles get added to the same link, so it's worth saving. (Independent page, not the hiring platform. I'm a referral partner and may earn a bonus if you're hired. Applying is free.)`;
   }
 
+  let JF = { q: '', st: '' };
   async function viewJobs() {
-    app.innerHTML = '<div class="adm"><p class="muted">Loading…</p></div>';
+    if (!JOBS.length) app.innerHTML = '<div class="adm"><p class="muted">Loading…</p></div>';
     await refresh();
     const live = JOBS.filter((j) => j.status === 'live');
     const v = JOBS.reduce((n, j) => n + j.views, 0), a = JOBS.reduce((n, j) => n + j.applies, 0);
-    app.innerHTML = `<div class="adm"><div class="row between"><h1>Jobs</h1><a class="btn primary sm" href="#new">+ Add job</a></div>
-      <div class="stats"><div><b>${live.length}</b><span>live pages</span></div><div><b>${v}</b><span>page views</span></div><div><b>${a}</b><span>apply clicks</span></div><div><b>${v ? Math.round(a / v * 100) : 0}%</b><span>view → apply</span></div></div>
-      <div class="hint">Daily routine (≈1 min): in your referral dashboard, click "Refer and earn" on 1–3 roles, copy the links, and paste them into <a href="#new">Add job</a>. Everything else is written for you. (The dashboard itself stays manual: its terms don't allow automated tools.)</div>
-      <div class="panel" style="margin-top:14px;overflow-x:auto">${JOBS.length ? `<table class="t cards"><tr><th>Role</th><th class="hm">Domain</th><th>Status</th><th>Views</th><th>Applies</th><th><span class="sr">Actions</span></th></tr>
-      ${JOBS.map((j) => `<tr><td><b>${esc(j.title)}</b><br><span class="muted small">${esc(j.pay_text || '')}</span></td><td class="hm">${esc(j.domain)}</td><td><span class="pill ${j.status}">${j.status}</span></td><td>${j.views}</td><td>${j.applies}</td>
-      <td class="row" style="justify-content:flex-end"><button class="btn primary sm" data-posts="${j.id}">Posts</button><button class="btn ghost sm" data-copy="${esc(pageUrl(j))}">Copy link</button>${j.status !== 'draft' ? `<a class="btn ghost sm" target="_blank" href="${esc(pageUrl(j))}">Open</a>` : ''}<a class="btn ghost sm" href="#edit-${j.id}">Edit</a></td></tr>`).join('')}</table>` : '<p class="muted">No jobs yet. <a href="#new">Add your first one</a>.</p>'}</div></div>`;
-    $$('[data-copy]').forEach((b) => b.onclick = () => copy(b.dataset.copy));
-    $$('[data-posts]').forEach((b) => b.onclick = () => openPosts(+b.dataset.posts));
+    const cnt = (st) => JOBS.filter((j) => !st || j.status === st).length;
+    app.innerHTML = `<div class="adm"><div class="row between"><h1>Jobs</h1><a class="btn primary sm hm" href="#new">+ Add job</a></div>
+      <div class="stats mini"><div><b>${live.length}</b><span>live</span></div><div><b>${v}</b><span>views</span></div><div><b>${a}</b><span>applies</span></div><div><b>${v ? Math.round(a / v * 100) : 0}%</b><span>view→apply</span></div></div>
+      <div class="jtools"><input type="search" id="jq" placeholder="Search roles" value="${esc(JF.q)}" aria-label="Search roles">
+      <div class="jchips" role="group" aria-label="Filter by status">${[['', 'All'], ['live', 'Live'], ['draft', 'Draft'], ['closed', 'Closed']].map(([k, l]) => `<button type="button" data-st="${k}" class="${JF.st === k ? 'on' : ''}">${l} <i>${cnt(k)}</i></button>`).join('')}</div></div>
+      <div id="jlist"></div>
+      <details class="hint fold"><summary>Daily routine (≈1 min)</summary>In your referral dashboard, click "Refer and earn" on 1–3 roles, copy the links, and paste them into <a href="#new">Add links</a>. Everything else is written for you. (The dashboard itself stays manual: its terms don't allow automated tools.)</details></div>`;
+    const draw = () => {
+      const q = JF.q.toLowerCase();
+      const xs = JOBS.filter((j) => (!JF.st || j.status === JF.st) && (!q || (j.title + ' ' + j.domain + ' ' + (j.pay_text || '')).toLowerCase().includes(q)));
+      $('#jlist').innerHTML = !JOBS.length ? '<p class="muted">No jobs yet. <a href="#new">Add your first one</a>.</p>' : !xs.length ? '<p class="muted" style="padding:14px 2px">No roles match.</p>' :
+        `<div class="jl">${xs.map((j) => `<article class="jrow"><div class="jmain"><b>${esc(j.title)}</b><span class="jmeta"><span class="pill ${j.status}">${j.status}</span>${esc(j.pay_text || '')}<span class="dot">·</span>${esc(j.domain)}<span class="dot">·</span>${j.views} views · ${j.applies} applies</span></div>
+          <div class="jact"><button class="btn primary sm" data-posts="${j.id}">Posts</button><button class="btn ghost sm" data-copy="${esc(pageUrl(j))}">Copy link</button>${j.status !== 'draft' ? `<a class="btn ghost sm" target="_blank" rel="noopener" href="${esc(pageUrl(j))}">Open</a>` : ''}<a class="btn ghost sm" href="#edit-${j.id}">Edit</a></div></article>`).join('')}</div>`;
+      $$('#jlist [data-copy]').forEach((b) => b.onclick = async () => { await copy(b.dataset.copy); flash(b); });
+      $$('#jlist [data-posts]').forEach((b) => b.onclick = () => openPosts(+b.dataset.posts));
+    };
+    $('#jq').oninput = (e) => { JF.q = e.target.value; draw(); };
+    $$('.jchips button').forEach((b) => b.onclick = () => { JF.st = b.dataset.st; $$('.jchips button').forEach((x) => x.classList.toggle('on', x === b)); draw(); });
+    draw();
   }
 
   // ---------- posts modal: every post + reply for one job, with instant copy ----------
@@ -168,6 +183,7 @@
   }
 
   function viewEdit(job) {
+    setTitle(job && job.id ? 'Edit job' : 'New job');
     const j = job ? JSON.parse(JSON.stringify(job)) : { status: 'draft', company: 'micro1', skills: [], scope: [], preferred: [], fit: [], prep: [], threads: [] };
     app.innerHTML = `<div class="adm"><h1>${job ? 'Edit job' : 'Add a job'}</h1>
       <div class="panel"><label class="f">Your referral link for this role<input type="url" id="ref" placeholder="https://…" value="${esc(j.referral_url || '')}"></label><textarea id="raw" hidden>${esc(j.raw || '')}</textarea></div>
@@ -339,7 +355,7 @@
 
   async function start() {
     try { await api({ action: 'me' }); } catch (e) { return; }
-    $('#tabs').hidden = false;
+    $('#tabs').hidden = false; document.body.classList.remove('signedout');
     const h = location.hash.slice(1); if (h.startsWith('edit-')) { await refresh(); viewEdit(JOBS.find((x) => String(x.id) === h.slice(5))); } else tab(h || 'jobs');
   }
   
