@@ -55,10 +55,13 @@ button[disabled]{opacity:.6}.cg{display:grid;gap:10px}.cg[hidden]{display:none}.
         if (!x.ok) { try { localStorage.removeItem('rj_admin'); } catch (e) {} tok = ''; return login('Your sign-in expired. Get a new code.'); }
         var row = x.d && x.d[0];
         if (!row) { app.innerHTML = '<div class="box"><h1>Not found</h1><p>No private page called “' + esc(slug) + '”.</p></div>'; return; }
-        document.title = row.title + ' · Private';
-        app.innerHTML = '<div class="top"><a href="/admin" aria-label="Back to admin">←</a><nav class="seg">' + PAGES.map(function (p) { return '<a href="/vault/' + p[0] + '"' + (p[0] === slug ? ' class="on" aria-current="page"' : '') + '>' + p[1] + '</a>'; }).join('') + '</nav><span class="lock">🔒 Only you</span></div>' +
-          '<iframe title="' + esc(row.title) + '" sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox allow-modals" allow="clipboard-write"></iframe>';
-        app.querySelector('iframe').srcdoc = row.html;
+        // Render the page as the whole document (same origin), so the embedded jobs board, the opt-in form and copy buttons all work normally.
+        var L = 'color:#fff;text-decoration:none;padding:10px 10px;display:inline-block';
+        var pill = '<div style="position:fixed;left:12px;bottom:calc(12px + env(safe-area-inset-bottom));z-index:2147483647;background:rgba(19,22,27,.85);font:600 13px/1 system-ui,sans-serif;border-radius:99px;box-shadow:0 4px 14px rgba(0,0,0,.25);padding:0 4px" title="Private: only you can open these pages">' +
+          '<a href="/admin" style="' + L + '">🔒</a>' + PAGES.map(function (p) { return '<a href="/vault/' + p[0] + '" style="' + L + (p[0] === slug ? ';color:#9EE6C8' : '') + '">' + p[1] + '</a>'; }).join('') + '</div>';
+        var html = row.html.replace('<base target="_blank">', '').replace(/<\/body>/i, pill + '</body>');
+        document.open(); document.write(html); document.close();
+        try { document.title = row.title + ' · Private'; } catch (e) {}
       })
       .catch(function () { app.innerHTML = '<div class="box"><h1>Couldn’t load</h1><p>Check your connection and refresh.</p></div>'; });
   }
