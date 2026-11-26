@@ -7,7 +7,7 @@
 *{box-sizing:border-box}html,body{margin:0;height:100%;background:var(--paper);color:var(--ink);font:16px/1.5 system-ui,-apple-system,Segoe UI,sans-serif}
 .top{position:fixed;top:0;left:0;right:0;height:44px;padding:0 10px;padding-top:env(safe-area-inset-top);display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);z-index:2;font-size:.85rem}
 .top a{color:var(--ink2);text-decoration:none;font-weight:600;padding:8px}
-.top b{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.9rem}
+.seg{flex:1;display:flex;gap:4px;min-width:0}.seg a{padding:6px 12px;border-radius:99px;color:var(--ink2)}.seg a.on{background:#ECE8FE;color:var(--acc)}.top b{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.9rem}
 .lock{font-size:.75rem;color:var(--ink2);border:1px solid var(--line);border-radius:99px;padding:2px 8px;white-space:nowrap}
 iframe{position:fixed;top:calc(44px + env(safe-area-inset-top));left:0;right:0;bottom:0;width:100%;height:calc(100% - 44px - env(safe-area-inset-top));border:0;background:#fff}
 .box{max-width:380px;margin:18vh auto 0;padding:24px 20px;background:#fff;border:1px solid var(--line);border-radius:16px;display:grid;gap:12px}
@@ -24,7 +24,8 @@ button[disabled]{opacity:.6}.cg{display:grid;gap:10px}.cg[hidden]{display:none}.
   var SB = 'https://qbubwemdvwflxvxwesrl.supabase.co/rest/v1/rpc/rj_vault_get';
   var KEY = 'sb_publishable_zoqPKy4LSecdPN8d0M0mug_Rrejb0XR';
   var EMAIL = 'dijaedadula@gmail.com';
-  var slug = (location.pathname.split('/')[2] || 'zara-interview').toLowerCase();
+  var slug = (location.pathname.split('/')[2] || 'micro1-funnel').toLowerCase();
+  var PAGES = [['micro1-funnel', 'Landing page'], ['zara-interview', 'Guide']];
   var app = document.getElementById('app');
   var tok = ''; try { tok = localStorage.getItem('rj_admin') || ''; } catch (e) {}
   function esc(s) { return String(s || '').replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
@@ -55,13 +56,22 @@ button[disabled]{opacity:.6}.cg{display:grid;gap:10px}.cg[hidden]{display:none}.
         var row = x.d && x.d[0];
         if (!row) { app.innerHTML = '<div class="box"><h1>Not found</h1><p>No private page called “' + esc(slug) + '”.</p></div>'; return; }
         document.title = row.title + ' · Private';
-        app.innerHTML = '<div class="top"><a href="/admin">← Admin</a><b>' + esc(row.title) + '</b><span class="lock">🔒 Only you</span></div>' +
+        app.innerHTML = '<div class="top"><a href="/admin" aria-label="Back to admin">←</a><nav class="seg">' + PAGES.map(function (p) { return '<a href="/vault/' + p[0] + '"' + (p[0] === slug ? ' class="on" aria-current="page"' : '') + '>' + p[1] + '</a>'; }).join('') + '</nav><span class="lock">🔒 Only you</span></div>' +
           '<iframe title="' + esc(row.title) + '" sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox allow-modals" allow="clipboard-write"></iframe>';
         app.querySelector('iframe').srcdoc = row.html;
       })
       .catch(function () { app.innerHTML = '<div class="box"><h1>Couldn’t load</h1><p>Check your connection and refresh.</p></div>'; });
   }
-  load();
+  // Opened from the CRM: trade the one-time pass for a session, no emailed code needed.
+  var sso = /[#&]sso=([0-9a-f]{64})/.exec(location.hash);
+  if (sso) {
+    try { history.replaceState(null, '', location.pathname); } catch (e) {}
+    if (tok) load();
+    else fetch('https://qbubwemdvwflxvxwesrl.supabase.co/functions/v1/sso', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'redeem', app: 'jobs', pass: sso[1] }) })
+      .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+      .then(function (x) { if (!x.ok || !x.d.token) throw new Error(); tok = x.d.token; try { localStorage.setItem('rj_admin', tok); } catch (e) {} load(); })
+      .catch(function () { login('Couldn’t sign you in from the CRM. Use an emailed code.'); });
+  } else load();
 })();
 </script>
 </body></html>
