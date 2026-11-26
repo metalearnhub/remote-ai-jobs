@@ -2,6 +2,10 @@
   "cleanUrls": true,
   "rewrites": [
     {
+      "source": "/vault/:slug",
+      "destination": "/vault.html"
+    },
+    {
       "source": "/og/:file",
       "destination": "/api/og?slug=:file"
     },
@@ -19,6 +23,19 @@
     }
   ],
   "headers": [
+    {
+      "source": "/vault(.*)",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "no-cache"
+        }
+      ]
+    },
     {
       "source": "/admin",
       "headers": [

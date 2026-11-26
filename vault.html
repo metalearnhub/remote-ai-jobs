@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Private · Remote AI Work</title><meta name="robots" content="noindex,nofollow"><meta name="theme-color" content="#4B2EE8">
+<link rel="icon" href="/assets/icon.svg" type="image/svg+xml">
+<style>
+:root{--ink:#13161B;--ink2:#555C67;--line:#DFE3E8;--paper:#F4F5F7;--acc:#4B2EE8;--bad:#C13A2F}
+*{box-sizing:border-box}html,body{margin:0;height:100%;background:var(--paper);color:var(--ink);font:16px/1.5 system-ui,-apple-system,Segoe UI,sans-serif}
+.top{position:fixed;top:0;left:0;right:0;height:44px;padding:0 10px;padding-top:env(safe-area-inset-top);display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);z-index:2;font-size:.85rem}
+.top a{color:var(--ink2);text-decoration:none;font-weight:600;padding:8px}
+.top b{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.9rem}
+.lock{font-size:.75rem;color:var(--ink2);border:1px solid var(--line);border-radius:99px;padding:2px 8px;white-space:nowrap}
+iframe{position:fixed;top:calc(44px + env(safe-area-inset-top));left:0;right:0;bottom:0;width:100%;height:calc(100% - 44px - env(safe-area-inset-top));border:0;background:#fff}
+.box{max-width:380px;margin:18vh auto 0;padding:24px 20px;background:#fff;border:1px solid var(--line);border-radius:16px;display:grid;gap:12px}
+.box h1{font-size:1.2rem;margin:0}.box p{margin:0;color:var(--ink2);font-size:.92rem}
+input{font:inherit;font-size:16px;padding:12px 14px;border:1.5px solid var(--line);border-radius:12px;width:100%}
+button{font:inherit;font-weight:700;padding:12px 16px;border:0;border-radius:12px;background:var(--acc);color:#fff;cursor:pointer;min-height:46px}
+button[disabled]{opacity:.6}.cg{display:grid;gap:10px}.cg[hidden]{display:none}.err{color:var(--bad);font-size:.9rem;min-height:1.2em}
+</style></head>
+<body>
+<div id="app"><p style="text-align:center;margin-top:30vh;color:#555C67">Loading…</p></div>
+<script>
+(function () {
+  var FN = 'https://qbubwemdvwflxvxwesrl.supabase.co/functions/v1/rj';
+  var SB = 'https://qbubwemdvwflxvxwesrl.supabase.co/rest/v1/rpc/rj_vault_get';
+  var KEY = 'sb_publishable_zoqPKy4LSecdPN8d0M0mug_Rrejb0XR';
+  var EMAIL = 'dijaedadula@gmail.com';
+  var slug = (location.pathname.split('/')[2] || 'zara-interview').toLowerCase();
+  var app = document.getElementById('app');
+  var tok = ''; try { tok = localStorage.getItem('rj_admin') || ''; } catch (e) {}
+  function esc(s) { return String(s || '').replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function api(b) { return fetch(FN, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) }).then(function (r) { return r.json().then(function (d) { if (!r.ok) throw new Error(d.error || 'Something went wrong'); return d; }); }); }
+
+  function login(msg) {
+    app.innerHTML = '<form class="box" id="f"><h1>Private page</h1><p>Only you can open this. A 6-digit code goes to ' + esc(EMAIL) + '.</p>' +
+      '<button type="submit" id="send">Email me a code</button><div id="c" hidden class="cg"><input id="code" inputmode="numeric" maxlength="6" placeholder="6-digit code" autocomplete="one-time-code" aria-label="6-digit code"><button type="button" id="go">Open</button></div><div class="err" id="e">' + esc(msg || '') + '</div></form>';
+    var e = document.getElementById('e');
+    document.getElementById('f').onsubmit = function (ev) {
+      ev.preventDefault(); var b = document.getElementById('send'); b.disabled = true; e.textContent = '';
+      api({ action: 'code', email: EMAIL }).then(function () { document.getElementById('c').hidden = false; b.textContent = 'Code sent ✓'; document.getElementById('code').focus(); })
+        .catch(function (x) { b.disabled = false; e.textContent = x.message; });
+    };
+    document.getElementById('go').onclick = function () {
+      e.textContent = '';
+      api({ action: 'verify', email: EMAIL, code: document.getElementById('code').value }).then(function (d) { tok = d.token; try { localStorage.setItem('rj_admin', tok); } catch (x) {} load(); })
+        .catch(function (x) { e.textContent = x.message; });
+    };
+  }
+
+  function load() {
+    if (!tok) return login();
+    fetch(SB, { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: KEY, Authorization: 'Bearer ' + KEY }, body: JSON.stringify({ p_token: tok, p_slug: slug }) })
+      .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+      .then(function (x) {
+        if (!x.ok) { try { localStorage.removeItem('rj_admin'); } catch (e) {} tok = ''; return login('Your sign-in expired. Get a new code.'); }
+        var row = x.d && x.d[0];
+        if (!row) { app.innerHTML = '<div class="box"><h1>Not found</h1><p>No private page called “' + esc(slug) + '”.</p></div>'; return; }
+        document.title = row.title + ' · Private';
+        app.innerHTML = '<div class="top"><a href="/admin">← Admin</a><b>' + esc(row.title) + '</b><span class="lock">🔒 Only you</span></div>' +
+          '<iframe title="' + esc(row.title) + '" sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox allow-modals" allow="clipboard-write"></iframe>';
+        app.querySelector('iframe').srcdoc = row.html;
+      })
+      .catch(function () { app.innerHTML = '<div class="box"><h1>Couldn’t load</h1><p>Check your connection and refresh.</p></div>'; });
+  }
+  load();
+})();
+</script>
+</body></html>
