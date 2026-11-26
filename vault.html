@@ -21,13 +21,16 @@ button[disabled]{opacity:.6}.cg{display:grid;gap:10px}.cg[hidden]{display:none}.
 <script>
 (function () {
   var FN = 'https://qbubwemdvwflxvxwesrl.supabase.co/functions/v1/rj';
-  var SB = 'https://qbubwemdvwflxvxwesrl.supabase.co/rest/v1/rpc/rj_vault_get';
+  var RPC = 'https://qbubwemdvwflxvxwesrl.supabase.co/rest/v1/rpc/';
   var KEY = 'sb_publishable_zoqPKy4LSecdPN8d0M0mug_Rrejb0XR';
   var EMAIL = 'dijaedadula@gmail.com';
   var slug = (location.pathname.split('/')[2] || 'micro1-funnel').toLowerCase();
   var PAGES = [['micro1-funnel', 'Landing page'], ['zara-interview', 'Guide']];
   var app = document.getElementById('app');
   var tok = ''; try { tok = localStorage.getItem('rj_admin') || ''; } catch (e) {}
+  var guest = ''; try { guest = localStorage.getItem('rj_vault_guest') || ''; } catch (e) {}
+  function rpc(fn, body) { return fetch(RPC + fn, { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: KEY, Authorization: 'Bearer ' + KEY }, body: JSON.stringify(body) }).then(function (r) { return r.json().then(function (d) { if (!r.ok) throw new Error(d.message || 'Something went wrong'); return d; }); }); }
+  function note(t, m) { app.innerHTML = '<div class="box"><h1>' + esc(t) + '</h1><p>' + esc(m) + '</p></div>'; }
   function esc(s) { return String(s || '').replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
   function api(b) { return fetch(FN, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) }).then(function (r) { return r.json().then(function (d) { if (!r.ok) throw new Error(d.error || 'Something went wrong'); return d; }); }); }
 
@@ -48,26 +51,60 @@ button[disabled]{opacity:.6}.cg{display:grid;gap:10px}.cg[hidden]{display:none}.
   }
 
   function load() {
-    if (!tok) return login();
-    fetch(SB, { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: KEY, Authorization: 'Bearer ' + KEY }, body: JSON.stringify({ p_token: tok, p_slug: slug }) })
-      .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
-      .then(function (x) {
-        if (!x.ok) { try { localStorage.removeItem('rj_admin'); } catch (e) {} tok = ''; return login('Your sign-in expired. Get a new code.'); }
-        var row = x.d && x.d[0];
-        if (!row) { app.innerHTML = '<div class="box"><h1>Not found</h1><p>No private page called “' + esc(slug) + '”.</p></div>'; return; }
-        // Render the page as the whole document (same origin), so the embedded jobs board, the opt-in form and copy buttons all work normally.
-        var L = 'color:#fff;text-decoration:none;padding:10px 10px;display:inline-block';
-        var pill = '<div style="position:fixed;left:12px;bottom:calc(12px + env(safe-area-inset-bottom));z-index:2147483647;background:rgba(19,22,27,.85);font:600 13px/1 system-ui,sans-serif;border-radius:99px;box-shadow:0 4px 14px rgba(0,0,0,.25);padding:0 4px" title="Private: only you can open these pages">' +
-          '<a href="/admin" style="' + L + '">🔒</a>' + PAGES.map(function (p) { return '<a href="/vault/' + p[0] + '" style="' + L + (p[0] === slug ? ';color:#9EE6C8' : '') + '">' + p[1] + '</a>'; }).join('') + '</div>';
-        var html = row.html.replace('<base target="_blank">', '').replace(/<\/body>/i, pill + '</body>');
+    if (!tok && !guest) return login();
+    rpc('rj_vault_open', { p_token: tok || null, p_slug: slug, p_guest: guest || null })
+      .then(function (d) {
+        var row = d && d[0];
+        if (!row) return note('Not found', 'No private page called “' + slug + '”.');
+        var owner = row.viewer === 'owner';
+        var L = 'color:#fff;text-decoration:none;padding:10px 10px;display:inline-block;background:none;border:0;font:inherit;cursor:pointer';
+        var pill = '<div id="vpill" style="position:fixed;left:12px;bottom:calc(12px + env(safe-area-inset-bottom));z-index:2147483646;background:rgba(19,22,27,.85);font:600 13px/1 system-ui,sans-serif;border-radius:99px;box-shadow:0 4px 14px rgba(0,0,0,.25);padding:0 4px">' +
+          (owner ? '<a href="/admin" style="' + L + '" title="Private: only you">🔒</a>' : '') +
+          PAGES.map(function (p) { return '<a href="/vault/' + p[0] + '" style="' + L + (p[0] === slug ? ';color:#9EE6C8' : '') + '">' + p[1] + '</a>'; }).join('') +
+          (owner ? '<button type="button" id="vshare" style="' + L + ';color:#FFD27A">Share</button>' : '') + '</div>';
+        var html = row.html.replace('<base target="_blank">', '').replace(/<\/body>/i, pill + (owner ? SHARE_UI : '') + '</body>');
         document.open(); document.write(html); document.close();
-        try { document.title = row.title + ' · Private'; } catch (e) {}
+        try { document.title = row.title + (owner ? ' · Private' : ''); } catch (e) {}
       })
-      .catch(function () { app.innerHTML = '<div class="box"><h1>Couldn’t load</h1><p>Check your connection and refresh.</p></div>'; });
+      .catch(function () {
+        if (guest && !tok) { try { localStorage.removeItem('rj_vault_guest'); } catch (e) {} return note('Access ended', 'This private link has expired or was turned off. Ask Dijae for a new one.'); }
+        try { localStorage.removeItem('rj_admin'); } catch (e) {} tok = ''; login('Your sign-in expired. Get a new code.');
+      });
   }
+
+  // Owner-only sheet: make a one-time link for a friend, see who opened theirs, turn links off.
+  var SHARE_UI = '<div id="vsh" hidden style="position:fixed;inset:0;z-index:2147483647;background:rgba(0,0,0,.45);font:15px/1.45 system-ui,-apple-system,sans-serif;color:#13161B">' +
+    '<div style="position:absolute;left:0;right:0;bottom:0;max-height:88dvh;overflow:auto;background:#fff;border-radius:20px 20px 0 0;padding:16px 16px calc(18px + env(safe-area-inset-bottom));max-width:560px;margin:0 auto">' +
+    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px"><b style="font-size:17px">Share with a friend</b><button type="button" id="vx" aria-label="Close" style="border:0;background:#F1F2F4;border-radius:12px;width:40px;height:40px;font-size:18px;cursor:pointer">✕</button></div>' +
+    '<p style="margin:0 0 12px;color:#555C67;font-size:14px">The link opens <b>once</b>, on the first phone or browser that taps it. That device keeps access (landing page + guide) until it expires. Anyone else gets “already used”.</p>' +
+    '<div style="display:grid;gap:10px"><input id="vn" placeholder="Friend\'s name (only you see it)" style="font:inherit;font-size:16px;padding:12px 14px;border:1.5px solid #DFE3E8;border-radius:12px">' +
+    '<div style="display:flex;gap:8px"><select id="vd" style="flex:1;font:inherit;font-size:16px;padding:12px;border:1.5px solid #DFE3E8;border-radius:12px;background:#fff"><option value="1">Works for 1 day</option><option value="7" selected>Works for 7 days</option><option value="30">Works for 30 days</option><option value="365">Works for 1 year</option></select>' +
+    '<button type="button" id="vc" style="font:inherit;font-weight:700;padding:12px 16px;border:0;border-radius:12px;background:#4B2EE8;color:#fff;cursor:pointer">Create link</button></div>' +
+    '<div id="vout" hidden style="background:#ECE8FE;border-radius:12px;padding:12px;display:grid;gap:8px"><code id="vlink" style="word-break:break-all;font-size:13px"></code><div style="display:flex;gap:8px"><button type="button" id="vcopy" style="flex:1;font:inherit;font-weight:700;padding:10px;border:0;border-radius:10px;background:#4B2EE8;color:#fff;cursor:pointer">Copy link</button><button type="button" id="vsend" style="flex:1;font:inherit;font-weight:700;padding:10px;border:1.5px solid #4B2EE8;border-radius:10px;background:#fff;color:#4B2EE8;cursor:pointer">Send…</button></div></div>' +
+    '<p id="verr" style="color:#C13A2F;margin:0;font-size:14px"></p></div>' +
+    '<b style="display:block;margin:16px 0 6px;font-size:14px">Your links</b><div id="vlist" style="display:grid;gap:8px"><span style="color:#555C67;font-size:14px">Loading…</span></div></div></div>' +
+    '<script>(function(){var RPC=' + JSON.stringify(RPC) + ',K=' + JSON.stringify(KEY) + ',T=localStorage.getItem("rj_admin");' +
+    'function rpc(b){return fetch(RPC+"rj_vault_share",{method:"POST",headers:{"Content-Type":"application/json",apikey:K,Authorization:"Bearer "+K},body:JSON.stringify(Object.assign({p_token:T},b))}).then(function(r){return r.json().then(function(d){if(!r.ok)throw new Error(d.message||"Error");return d;});});}' +
+    'function $(i){return document.getElementById(i);}function e(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;","\\"":"&quot;"}[c];});}' +
+    'function d(x){return new Date(x).toLocaleDateString("en-PH",{month:"short",day:"numeric"});}' +
+    'function list(){rpc({p_op:"list"}).then(function(xs){$("vlist").innerHTML=xs.length?xs.map(function(x){var now=Date.now(),exp=new Date(x.expires_at).getTime()<now;var st=x.revoked?"Turned off":exp?"Expired":x.claimed_at?"Opened "+d(x.claimed_at)+" · "+x.opens+" view"+(x.opens==1?"":"s"):"Not opened yet";' +
+    'return "<div style=\\"display:flex;align-items:center;gap:10px;border:1px solid #DFE3E8;border-radius:12px;padding:10px 12px\\"><div style=\\"flex:1;min-width:0\\"><b>"+e(x.label)+"</b><div style=\\"color:#555C67;font-size:13px\\">"+st+(x.revoked||exp?"":" · until "+d(x.expires_at))+"</div></div>"+(x.revoked||exp?"":"<button data-r=\\""+x.id+"\\" style=\\"font:inherit;font-size:14px;font-weight:700;padding:8px 12px;border:1.5px solid #DFE3E8;border-radius:10px;background:#fff;color:#C13A2F;cursor:pointer\\">Turn off</button>")+"</div>";}).join(""):"<span style=\\"color:#555C67;font-size:14px\\">No links yet.</span>";}).catch(function(x){$("vlist").textContent=x.message;});}' +
+    'var link="";$("vshare").onclick=function(){$("vsh").hidden=false;list();};$("vx").onclick=function(){$("vsh").hidden=true;};$("vsh").onclick=function(ev){if(ev.target.id==="vsh")$("vsh").hidden=true;};' +
+    '$("vc").onclick=function(){var b=this;b.disabled=true;$("verr").textContent="";rpc({p_op:"create",p_label:$("vn").value,p_days:+$("vd").value}).then(function(r){link=location.origin+"/vault/micro1-funnel#k="+r.key;$("vlink").textContent=link;$("vout").hidden=false;$("vn").value="";list();}).catch(function(x){$("verr").textContent=x.message;}).then(function(){b.disabled=false;});};' +
+    '$("vcopy").onclick=function(){var b=this;(navigator.clipboard?navigator.clipboard.writeText(link):Promise.reject()).then(function(){b.textContent="Copied ✓";setTimeout(function(){b.textContent="Copy link";},1500);},function(){prompt("Copy this link:",link);});};' +
+    '$("vsend").onclick=function(){var t="Here\'s my micro1 interview guide. The link works once, on the device you open it with:";if(navigator.share)navigator.share({text:t,url:link}).catch(function(){});else location.href="https://wa.me/?text="+encodeURIComponent(t+"\\n"+link);};' +
+    '$("vlist").onclick=function(ev){var b=ev.target.closest("[data-r]");if(!b)return;b.disabled=true;rpc({p_op:"revoke",p_id:+b.dataset.r}).then(list);};})();<\/script>';
+
   // Opened from the CRM: trade the one-time pass for a session, no emailed code needed.
   var sso = /[#&]sso=([0-9a-f]{64})/.exec(location.hash);
-  if (sso) {
+  var key = /[#&]k=([0-9a-f]{48})/.exec(location.hash);
+  if (key) {
+    try { history.replaceState(null, '', location.pathname); } catch (e) {}
+    if (tok || guest) load(); // you, or the friend reopening their own link
+    else rpc('rj_vault_claim', { p_key: key[1] })
+      .then(function (r) { guest = r.guest; try { localStorage.setItem('rj_vault_guest', guest); } catch (e) {} load(); })
+      .catch(function (x) { note('Link already used', x.message); });
+  } else if (sso) {
     try { history.replaceState(null, '', location.pathname); } catch (e) {}
     if (tok) load();
     else fetch('https://qbubwemdvwflxvxwesrl.supabase.co/functions/v1/sso', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'redeem', app: 'jobs', pass: sso[1] }) })
