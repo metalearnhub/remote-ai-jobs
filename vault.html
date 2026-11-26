@@ -72,28 +72,70 @@ button[disabled]{opacity:.6}.cg{display:grid;gap:10px}.cg[hidden]{display:none}.
       });
   }
 
-  // Owner-only sheet: make a one-time link for a friend, see who opened theirs, turn links off.
-  var SHARE_UI = '<div id="vsh" hidden style="position:fixed;inset:0;z-index:2147483647;background:rgba(0,0,0,.45);font:15px/1.45 system-ui,-apple-system,sans-serif;color:#13161B">' +
-    '<div style="position:absolute;left:0;right:0;bottom:0;max-height:88dvh;overflow:auto;background:#fff;border-radius:20px 20px 0 0;padding:16px 16px calc(18px + env(safe-area-inset-bottom));max-width:560px;margin:0 auto">' +
-    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px"><b style="font-size:17px">Share with a friend</b><button type="button" id="vx" aria-label="Close" style="border:0;background:#F1F2F4;border-radius:12px;width:40px;height:40px;font-size:18px;cursor:pointer">✕</button></div>' +
-    '<p style="margin:0 0 12px;color:#555C67;font-size:14px">The link opens <b>once</b>, on the first phone or browser that taps it. That device keeps access (landing page + guide) until it expires. Anyone else gets “already used”.</p>' +
-    '<div style="display:grid;gap:10px"><input id="vn" placeholder="Friend\'s name (only you see it)" style="font:inherit;font-size:16px;padding:12px 14px;border:1.5px solid #DFE3E8;border-radius:12px">' +
-    '<div style="display:flex;gap:8px"><select id="vd" style="flex:1;font:inherit;font-size:16px;padding:12px;border:1.5px solid #DFE3E8;border-radius:12px;background:#fff"><option value="1">Works for 1 day</option><option value="7" selected>Works for 7 days</option><option value="30">Works for 30 days</option><option value="365">Works for 1 year</option></select>' +
-    '<button type="button" id="vc" style="font:inherit;font-weight:700;padding:12px 16px;border:0;border-radius:12px;background:#4B2EE8;color:#fff;cursor:pointer">Create link</button></div>' +
-    '<div id="vout" hidden style="background:#ECE8FE;border-radius:12px;padding:12px;display:grid;gap:8px"><code id="vlink" style="word-break:break-all;font-size:13px"></code><div style="display:flex;gap:8px"><button type="button" id="vcopy" style="flex:1;font:inherit;font-weight:700;padding:10px;border:0;border-radius:10px;background:#4B2EE8;color:#fff;cursor:pointer">Copy link</button><button type="button" id="vsend" style="flex:1;font:inherit;font-weight:700;padding:10px;border:1.5px solid #4B2EE8;border-radius:10px;background:#fff;color:#4B2EE8;cursor:pointer">Send…</button></div></div>' +
-    '<p id="verr" style="color:#C13A2F;margin:0;font-size:14px"></p></div>' +
-    '<b style="display:block;margin:16px 0 6px;font-size:14px">Your links</b><div id="vlist" style="display:grid;gap:8px"><span style="color:#555C67;font-size:14px">Loading…</span></div></div></div>' +
-    '<script>(function(){var RPC=' + JSON.stringify(RPC) + ',K=' + JSON.stringify(KEY) + ',T=localStorage.getItem("rj_admin");' +
-    'function rpc(b){return fetch(RPC+"rj_vault_share",{method:"POST",headers:{"Content-Type":"application/json",apikey:K,Authorization:"Bearer "+K},body:JSON.stringify(Object.assign({p_token:T},b))}).then(function(r){return r.json().then(function(d){if(!r.ok)throw new Error(d.message||"Error");return d;});});}' +
-    'function $(i){return document.getElementById(i);}function e(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;","\\"":"&quot;"}[c];});}' +
-    'function d(x){return new Date(x).toLocaleDateString("en-PH",{month:"short",day:"numeric"});}' +
-    'function list(){rpc({p_op:"list"}).then(function(xs){$("vlist").innerHTML=xs.length?xs.map(function(x){var now=Date.now(),exp=new Date(x.expires_at).getTime()<now;var st=x.revoked?"Turned off":exp?"Expired":x.claimed_at?"Opened "+d(x.claimed_at)+" · "+x.opens+" view"+(x.opens==1?"":"s"):"Not opened yet";' +
-    'return "<div style=\\"display:flex;align-items:center;gap:10px;border:1px solid #DFE3E8;border-radius:12px;padding:10px 12px\\"><div style=\\"flex:1;min-width:0\\"><b>"+e(x.label)+"</b><div style=\\"color:#555C67;font-size:13px\\">"+st+(x.revoked||exp?"":" · until "+d(x.expires_at))+"</div></div>"+(x.revoked||exp?"":"<button data-r=\\""+x.id+"\\" style=\\"font:inherit;font-size:14px;font-weight:700;padding:8px 12px;border:1.5px solid #DFE3E8;border-radius:10px;background:#fff;color:#C13A2F;cursor:pointer\\">Turn off</button>")+"</div>";}).join(""):"<span style=\\"color:#555C67;font-size:14px\\">No links yet.</span>";}).catch(function(x){$("vlist").textContent=x.message;});}' +
-    'var link="";$("vshare").onclick=function(){$("vsh").hidden=false;list();};$("vx").onclick=function(){$("vsh").hidden=true;};$("vsh").onclick=function(ev){if(ev.target.id==="vsh")$("vsh").hidden=true;};' +
-    '$("vc").onclick=function(){var b=this;b.disabled=true;$("verr").textContent="";rpc({p_op:"create",p_label:$("vn").value,p_days:+$("vd").value}).then(function(r){link=location.origin+"/vault/micro1-funnel#k="+r.key;$("vlink").textContent=link;$("vout").hidden=false;$("vn").value="";list();}).catch(function(x){$("verr").textContent=x.message;}).then(function(){b.disabled=false;});};' +
-    '$("vcopy").onclick=function(){var b=this;(navigator.clipboard?navigator.clipboard.writeText(link):Promise.reject()).then(function(){b.textContent="Copied ✓";setTimeout(function(){b.textContent="Copy link";},1500);},function(){prompt("Copy this link:",link);});};' +
-    '$("vsend").onclick=function(){var t="Here\'s my micro1 interview guide. The link works once, on the device you open it with:";if(navigator.share)navigator.share({text:t,url:link}).catch(function(){});else location.href="https://wa.me/?text="+encodeURIComponent(t+"\\n"+link);};' +
-    '$("vlist").onclick=function(ev){var b=ev.target.closest("[data-r]");if(!b)return;b.disabled=true;rpc({p_op:"revoke",p_id:+b.dataset.r}).then(list);};})();<\/script>';
+  // Owner-only sheet: make links for friends, choose how many devices each can open on, extend or turn off later.
+  // Runs inside the rendered page, so it is injected as source.
+  function ownerShare(RPC, K) {
+    var T = localStorage.getItem('rj_admin');
+    var css = '#vsh{position:fixed;inset:0;z-index:2147483647;background:rgba(0,0,0,.45);font:15px/1.45 system-ui,-apple-system,sans-serif;color:#13161B}#vsh[hidden]{display:none}' +
+      '#vsh .sh{position:absolute;left:0;right:0;bottom:0;max-height:90dvh;overflow:auto;background:#fff;border-radius:20px 20px 0 0;padding:16px 16px calc(18px + env(safe-area-inset-bottom));max-width:560px;margin:0 auto}' +
+      '#vsh input,#vsh select{font:inherit;font-size:16px;padding:11px 12px;border:1.5px solid #DFE3E8;border-radius:12px;background:#fff;color:#13161B;min-width:0}' +
+      '#vsh button{font:inherit;font-weight:700;border-radius:10px;cursor:pointer}#vsh .pri{padding:12px 16px;border:0;background:#4B2EE8;color:#fff}#vsh .gh{padding:8px 10px;border:1.5px solid #DFE3E8;background:#fff;color:#13161B;font-size:14px}' +
+      '#vsh .row{display:flex;gap:8px;align-items:center}#vsh .muted{color:#555C67;font-size:13px}#vsh .item{border:1px solid #DFE3E8;border-radius:12px;padding:10px 12px;display:grid;gap:8px}' +
+      '#vsh .step{display:inline-flex;align-items:center;border:1.5px solid #DFE3E8;border-radius:10px;overflow:hidden}#vsh .step button{border:0;border-radius:0;background:#F4F5F7;width:36px;height:36px;font-size:18px;padding:0}#vsh .step b{min-width:34px;text-align:center}';
+    var box = document.createElement('div'); box.id = 'vsh'; box.hidden = true;
+    box.innerHTML = '<style>' + css + '</style><div class="sh">' +
+      '<div class="row" style="justify-content:space-between;margin-bottom:6px"><b style="font-size:17px">Share with a friend</b><button type="button" class="gh" id="vx" aria-label="Close">✕</button></div>' +
+      '<p class="muted" style="margin:0 0 12px">Each device that opens the link uses one “open”. When they’re used up, anyone else sees “already used”. You can add more opens or days any time.</p>' +
+      '<div style="display:grid;gap:10px"><input id="vn" placeholder="Friend\'s name (only you see it)">' +
+      '<div class="row"><span style="flex:1">Can open on</span><span class="step"><button type="button" data-n="-1" aria-label="Fewer">−</button><b id="vm">1</b><button type="button" data-n="1" aria-label="More">+</button></span><span>device(s)</span></div>' +
+      '<div class="row"><select id="vd" style="flex:1"><option value="1">Works for 1 day</option><option value="7" selected>Works for 7 days</option><option value="30">Works for 30 days</option><option value="365">Works for 1 year</option></select><button type="button" class="pri" id="vc">Create link</button></div>' +
+      '<div id="vout" hidden style="background:#ECE8FE;border-radius:12px;padding:12px;display:grid;gap:8px"><code id="vlink" style="word-break:break-all;font-size:13px"></code><div class="row"><button type="button" class="pri" id="vcopy" style="flex:1;padding:10px">Copy link</button><button type="button" class="gh" id="vsend" style="flex:1;padding:10px;color:#4B2EE8;border-color:#4B2EE8">Send…</button></div></div>' +
+      '<p id="verr" style="color:#C13A2F;margin:0;font-size:14px"></p></div>' +
+      '<b style="display:block;margin:16px 0 6px;font-size:14px">Your links</b><div id="vlist" style="display:grid;gap:8px"><span class="muted">Loading…</span></div></div>';
+    document.body.appendChild(box);
+    function $(i) { return document.getElementById(i); }
+    function e(x) { return String(x == null ? '' : x).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+    function d(x) { return new Date(x).toLocaleDateString('en-PH', { month: 'short', day: 'numeric' }); }
+    function rpc(b) { return fetch(RPC + 'rj_vault_manage', { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: K, Authorization: 'Bearer ' + K }, body: JSON.stringify(Object.assign({ p_token: T }, b)) }).then(function (r) { return r.json().then(function (x) { if (!r.ok) throw new Error(x.message || 'Error'); return x; }); }); }
+    var max = 1, link = '', ITEMS = [];
+    function list() {
+      rpc({ p_op: 'list' }).then(function (xs) {
+        ITEMS = xs;
+        $('vlist').innerHTML = xs.length ? xs.map(function (x) {
+          var exp = new Date(x.expires_at).getTime() < Date.now(), off = x.revoked || exp, full = x.claims >= x.max_claims;
+          var st = x.revoked ? 'Turned off' : exp ? 'Expired ' + d(x.expires_at) : (x.claims ? 'Opened on ' + x.claims + ' of ' + x.max_claims + ' device' + (x.max_claims == 1 ? '' : 's') + ' · ' + x.opens + ' view' + (x.opens == 1 ? '' : 's') : 'Not opened yet · ' + x.max_claims + ' open' + (x.max_claims == 1 ? '' : 's') + ' allowed') + ' · until ' + d(x.expires_at);
+          return '<div class="item"><div><b>' + e(x.label) + '</b>' + (full && !off ? ' <span class="muted">(used up)</span>' : '') + '<div class="muted">' + st + '</div></div>' +
+            '<div class="row" style="flex-wrap:wrap">' +
+            (x.revoked ? '<button class="gh" data-op="restore" data-id="' + x.id + '">Turn back on</button>' :
+              '<span class="muted">Opens</span><span class="step"><button type="button" data-op="max" data-d="-1" data-id="' + x.id + '"' + (x.max_claims <= Math.max(1, x.claims) ? ' disabled style="opacity:.4"' : '') + ' aria-label="Fewer opens">−</button><b>' + x.max_claims + '</b><button type="button" data-op="max" data-d="1" data-id="' + x.id + '" aria-label="More opens">+</button></span>' +
+              '<button class="gh" data-op="extend" data-id="' + x.id + '">+7 days</button>' +
+              '<button class="gh" data-op="revoke" data-id="' + x.id + '" style="color:#C13A2F;margin-left:auto">Turn off</button>') +
+            '</div></div>';
+        }).join('') : '<span class="muted">No links yet.</span>';
+      }).catch(function (x) { $('vlist').textContent = x.message; });
+    }
+    $('vshare').onclick = function () { box.hidden = false; list(); };
+    $('vx').onclick = function () { box.hidden = true; };
+    box.onclick = function (ev) { if (ev.target === box) box.hidden = true; };
+    box.querySelectorAll('[data-n]').forEach(function (b) { b.onclick = function () { max = Math.max(1, Math.min(100, max + (+b.dataset.n))); $('vm').textContent = max; }; });
+    $('vc').onclick = function () {
+      var b = this; b.disabled = true; $('verr').textContent = '';
+      rpc({ p_op: 'create', p_label: $('vn').value, p_days: +$('vd').value, p_max: max }).then(function (r) {
+        link = location.origin + '/vault/micro1-funnel#k=' + r.key; $('vlink').textContent = link; $('vout').hidden = false; $('vn').value = ''; list();
+      }).catch(function (x) { $('verr').textContent = x.message; }).then(function () { b.disabled = false; });
+    };
+    $('vcopy').onclick = function () { var b = this; (navigator.clipboard ? navigator.clipboard.writeText(link) : Promise.reject()).then(function () { b.textContent = 'Copied ✓'; setTimeout(function () { b.textContent = 'Copy link'; }, 1500); }, function () { prompt('Copy this link:', link); }); };
+    $('vsend').onclick = function () { var t = "Here's my micro1 interview guide:"; if (navigator.share) navigator.share({ text: t, url: link }).catch(function () {}); else location.href = 'https://wa.me/?text=' + encodeURIComponent(t + '\n' + link); };
+    $('vlist').onclick = function (ev) {
+      var b = ev.target.closest('[data-op]'); if (!b || b.disabled) return;
+      var id = +b.dataset.id, x = ITEMS.filter(function (i) { return i.id === id; })[0], op = b.dataset.op, body = { p_id: id };
+      if (op === 'max') { body.p_op = 'set_max'; body.p_max = x.max_claims + (+b.dataset.d); }
+      else if (op === 'extend') { body.p_op = 'extend'; body.p_days = 7; }
+      else body.p_op = op;
+      b.disabled = true; rpc(body).then(list).catch(function (er) { alert(er.message); list(); });
+    };
+  }
+  var SHARE_UI = '<script>(' + ownerShare.toString() + ')(' + JSON.stringify(RPC) + ',' + JSON.stringify(KEY) + ');<\/script>';
 
   // Opened from the CRM: trade the one-time pass for a session, no emailed code needed.
   var sso = /[#&]sso=([0-9a-f]{64})/.exec(location.hash);
