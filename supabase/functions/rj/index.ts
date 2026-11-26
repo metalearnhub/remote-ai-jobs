@@ -80,7 +80,13 @@ async function capture(req: Request, b: any) {
       await db.from("rj_events").insert({ job_slug: slug, lead_id: lead!.id, kind: "apply", ref: String(b.ref || "").slice(0, 80) || null, by_code: by && by !== lead!.ref_code ? by : null });
     }
   }
-  if (newlyAlerted) {
+  // Sign-ups from the private micro1 funnel get the interview guide (a personal one-time link), not the board's welcome.
+  const funnel = String(b.ref || "") === "micro1-funnel";
+  if (funnel) {
+    const w = welcomeZara(email);
+    // @ts-ignore EdgeRuntime is provided by Supabase
+    if (typeof EdgeRuntime !== "undefined") EdgeRuntime.waitUntil(w); else await w;
+  } else if (newlyAlerted) {
     const w = welcome(email, slug);
     // @ts-ignore EdgeRuntime is provided by Supabase
     if (typeof EdgeRuntime !== "undefined") EdgeRuntime.waitUntil(w); else await w;
@@ -111,6 +117,26 @@ async function welcome(email: string, slug: string) {
     await t.sendMail({
       from: FROM(), to: email, subject: "Your remote AI work guide (and job alerts are on)",
       html: wrap(`<p>Hi,</p><p>Thanks for signing up. Here's the free guide I promised: how AI-training and annotation work actually works, where to find it, and how I prepared for the AI interview after failing twice.</p><p><a href="${base}/guide" style="display:inline-block;background:#4b2ee8;color:#fff;padding:12px 18px;border-radius:10px;text-decoration:none;font-weight:700">Open the guide</a></p>${jobLine}<p>From now on, when I find a remote AI role worth your time, you'll get a short email. No spam, and you can leave with one click.</p><p>Dijae</p>`, unsub),
+      headers: { "List-Unsubscribe": `<${unsub}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" },
+    });
+  } catch (_) { /* best effort */ }
+  t.close();
+}
+
+// Lead magnet email for the micro1 funnel: a one-time link to the private "How I Prepared for the micro1 AI Interview" guide.
+async function welcomeZara(email: string) {
+  const t = transport(); if (!t) return;
+  const base = await site();
+  const key = rand(24);
+  const { error } = await db.from("rj_vault_shares").insert({ key_hash: await sha256(key), label: `Sign-up: ${email}`.slice(0, 60), expires_at: new Date(Date.now() + 90 * 864e5).toISOString() });
+  if (error) { t.close(); return; }
+  const link = `${base}/vault/zara-interview#k=${key}`;
+  const { data: s } = await db.from("nl_subscribers").select("unsub_token").eq("email", email).maybeSingle();
+  const unsub = `${NL}?u=${s?.unsub_token || ""}`;
+  try {
+    await t.sendMail({
+      from: FROM(), to: email, subject: "Your guide: How I Prepared for the micro1 AI Interview",
+      html: wrap(`<p>Hi,</p><p>Here's the guide you asked for: <b>How I Prepared for the micro1 AI Interview</b>. It's the 10 lessons I learned from failing Zara, micro1's AI interviewer, twice, then getting selected.</p><p><a href="${link}" style="display:inline-block;background:#4b2ee8;color:#fff;padding:12px 18px;border-radius:10px;text-decoration:none;font-weight:700">Open the guide</a></p><p style="color:#555">This link is just for you and opens on <b>one device</b>, so tap it on the phone or computer you'll read it on. After that, that device keeps access for 90 days. Use "Download PDF" inside to keep a copy.</p><p>Inside: how the process works, how to tailor your resume (with a copy-ready prompt), the STAR stories to prepare, and the setup checklist for interview day.</p><p>Good luck,<br>Dijae</p><p style="font-size:12px;color:#777">Independent guide based on personal experience. Not an official micro1 resource. Results are not guaranteed.</p>`, unsub),
       headers: { "List-Unsubscribe": `<${unsub}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" },
     });
   } catch (_) { /* best effort */ }
