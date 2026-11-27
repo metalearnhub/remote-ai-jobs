@@ -83,7 +83,7 @@
       <div class="jtools"><input type="search" id="jq" placeholder="Search roles" value="${esc(JF.q)}" aria-label="Search roles">
       <div class="jchips" role="group" aria-label="Filter by who can apply" data-g="w">${[['', 'Anywhere'], ['open', '🌍 Open to all'], ['countries', '📍 Country-only'], ['us', '🇺🇸 US-tied']].map(([k, l]) => `<button type="button" data-w="${k}" class="${JF.w === k ? 'on' : ''}">${l} <i>${JOBS.filter((j) => wMatch(j, k)).length}</i></button>`).join('')}</div>
       <div class="jchips" role="group" aria-label="Filter by status">${[['', 'All'], ['live', 'Live'], ['inactive', 'Inactive'], ['draft', 'Draft'], ['closed', 'Closed']].map(([k, l]) => `<button type="button" data-st="${k}" class="${JF.st === k ? 'on' : ''}">${l} <i>${cnt(k)}</i></button>`).join('')}</div></div>
-      <div class="lcheck" id="lcheck"><span>🔎 Link check runs daily · last: <b id="lcAt">…</b></span><button class="btn ghost sm" id="lcRun">Check all now</button></div>
+      <div class="lcheck" id="lcheck"><span>🔎 Auto check daily 9:17 AM · last: <b id="lcAt">…</b></span><button class="btn primary sm" id="lcRun">Scan all links</button></div>
       <div id="jlist"></div>
       <details class="hint fold"><summary>Daily routine (≈1 min)</summary>In your referral dashboard, click "Refer and earn" on 1–3 roles, copy the links, and paste them into <a href="#new">Add links</a>. Everything else is written for you. (The dashboard itself stays manual: its terms don't allow automated tools.)</details></div>`;
     const draw = () => {
@@ -102,15 +102,51 @@
     };
     api({ action: 'last_check' }).then((d) => { const l = d.last; $('#lcAt').textContent = l ? `${ago(l.at)} · ${l.checked} checked · ${l.off} switched off · ${l.on} back on${l.layout_warning ? ' · ⚠ pages unreadable, nothing switched off' : ''}` : 'not run yet'; }).catch(() => {});
     $('#lcRun').onclick = async () => {
-      const b = $('#lcRun'); b.disabled = true; b.textContent = 'Checking all… (~1 min)';
-      try { const d = await api({ action: 'check' }); await refresh(); draw(); const off = (d.jobs || []).filter((x) => x.change === 'switched off').length, on = (d.jobs || []).filter((x) => x.change === 'back on').length; $('#lcAt').textContent = `just now · ${d.checked} checked · ${off} switched off · ${on} back on`; toast(`${d.checked} checked · ${off} off · ${on} back on`); }
+      const b = $('#lcRun'); b.disabled = true; b.textContent = 'Scanning all links… (~1 min)';
+      try { const d = await api({ action: 'check', dry: true }); reviewScan(d, async () => { await refresh(); draw(); api({ action: 'last_check' }).then((x) => { const l = x.last; if (l) $('#lcAt').textContent = `${ago(l.at)} · ${l.checked} checked · ${l.off} switched off · ${l.on} back on`; }).catch(() => {}); }); }
       catch (e) { toast(e.message); }
-      b.disabled = false; b.textContent = 'Check all now';
+      b.disabled = false; b.textContent = 'Scan all links';
     };
     $('#jq').oninput = (e) => { JF.q = e.target.value; draw(); };
     $$('.jchips button[data-st]').forEach((b) => b.onclick = () => { JF.st = b.dataset.st; $$('.jchips button[data-st]').forEach((x) => x.classList.toggle('on', x === b)); draw(); });
     $$('.jchips button[data-w]').forEach((b) => b.onclick = () => { JF.w = b.dataset.w; $$('.jchips button[data-w]').forEach((x) => x.classList.toggle('on', x === b)); draw(); });
     draw();
+  }
+
+  // ---------- link scan review: nothing changes until Dijae confirms ----------
+  function reviewScan(d, done) {
+    const jobs = d.jobs || [];
+    const off = jobs.filter((x) => x.propose === 'off'), on = jobs.filter((x) => x.propose === 'on');
+    const warn = jobs.filter((x) => x.state === 'error' || (x.state !== 'ok' && !x.propose && x.status === 'live'));
+    const ok = jobs.filter((x) => x.state === 'ok' && !x.propose).length;
+    const item = (x, kind) => `<label class="srow"><input type="checkbox" data-${kind}="${x.id}" checked><span><b>${esc(x.title)}</b><small>${esc(x.note || (kind === 'on' ? 'Posting is open again' : ''))}</small></span></label>`;
+    const m = document.createElement('div');
+    m.className = 'modal'; m.setAttribute('role', 'dialog'); m.setAttribute('aria-modal', 'true'); m.setAttribute('aria-labelledby', 'sh');
+    m.innerHTML = `<div class="sheet scan"><div class="mhead"><div><b id="sh">Link scan: ${d.checked} roles checked</b><span class="muted small">Nothing has changed yet. Untick anything you want to keep as it is.</span></div><button class="x" aria-label="Close">✕</button></div>
+      <div class="mbody one">
+        <div class="ssum"><div class="sbad"><b>${off.length}</b><span>look inactive</span></div><div class="sgood"><b>${on.length}</b><span>open again</span></div><div><b>${ok}</b><span>fine</span></div>${warn.length ? `<div class="swarn"><b>${warn.length}</b><span>couldn't verify</span></div>` : ''}</div>
+        ${d.layout_warning ? '<p class="warn">⚠ Most postings couldn\'t be read. micro1 may have changed its page layout, so double-check before switching anything off.</p>' : ''}
+        ${off.length ? `<section><h3>Switch to inactive (${off.length})</h3><p class="muted small">Hidden from open roles. Saved links show "may be filled" with similar roles.</p>${off.map((x) => item(x, 'off')).join('')}</section>` : ''}
+        ${on.length ? `<section><h3>Switch back on (${on.length})</h3>${on.map((x) => item(x, 'on')).join('')}</section>` : ''}
+        ${warn.length ? `<section><h3>Couldn't verify (${warn.length})</h3><p class="muted small">Left as they are. The daily check switches these off if they fail two days in a row.</p>${warn.map((x) => `<div class="srow"><span><b>${esc(x.title)}</b><small>${esc(x.note || '')}</small></span></div>`).join('')}</section>` : ''}
+        ${!off.length && !on.length ? '<p><b>All good.</b> Every live role still has an open posting.</p>' : ''}
+      </div>
+      <div class="mbar sfoot">${off.length || on.length ? `<button class="btn primary" data-apply>Confirm: ${off.length ? `switch ${off.length} to inactive` : ''}${off.length && on.length ? ' · ' : ''}${on.length ? `turn ${on.length} back on` : ''}</button>` : ''}<button class="btn ghost" data-cancel>${off.length || on.length ? 'Cancel' : 'Close'}</button></div></div>`;
+    const close = () => { m.remove(); document.removeEventListener('keydown', onKey); document.body.style.overflow = ''; };
+    const onKey = (e) => { if (e.key === 'Escape') close(); };
+    const label = () => { const a = $$('[data-off]:checked', m).length, n = $$('[data-on]:checked', m).length, b = $('[data-apply]', m); if (!b) return; b.disabled = !a && !n; b.textContent = !a && !n ? 'Nothing ticked' : `Confirm: ${a ? `switch ${a} to inactive` : ''}${a && n ? ' · ' : ''}${n ? `turn ${n} back on` : ''}`; };
+    m.addEventListener('change', label);
+    m.addEventListener('click', async (e) => {
+      if (e.target === m || e.target.closest('.x') || e.target.closest('[data-cancel]')) return close();
+      const b = e.target.closest('[data-apply]'); if (!b) return;
+      const offIds = $$('[data-off]:checked', m).map((x) => +x.dataset.off), onIds = $$('[data-on]:checked', m).map((x) => +x.dataset.on);
+      const notes = {}; off.forEach((x) => (notes[x.id] = x.note));
+      b.disabled = true; b.textContent = 'Saving…';
+      try { const r = await api({ action: 'check_apply', off: offIds, on: onIds, notes, checked: d.checked }); close(); toast(`${r.off} switched to inactive · ${r.on} back on`); done && done(); }
+      catch (x) { toast(x.message); label(); }
+    });
+    document.addEventListener('keydown', onKey); document.body.style.overflow = 'hidden';
+    document.body.appendChild(m); $('.x', m).focus();
   }
 
   // ---------- posts modal: every post + reply for one job, with instant copy ----------

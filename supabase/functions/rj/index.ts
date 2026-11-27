@@ -372,7 +372,7 @@ async function checkPost(jb: any) {
   if (x.status !== "open") return { state: "gone", note: `Closed on micro1 (${x.status})` };
   return { state: "ok", note: null };
 }
-async function verifyPosts(ids: number[] | null) {
+async function verifyPosts(ids: number[] | null, dry = false) {
   let q = db.from("rj_jobs").select("id,title,status,referral_url,check_fails,auto_inactive").in("status", ["live", "inactive"]).order("checked_at", { ascending: true, nullsFirst: true }).limit(150);
   if (ids && ids.length) q = db.from("rj_jobs").select("id,title,status,referral_url,check_fails,auto_inactive").in("id", ids);
   const { data: jobs } = await q;
@@ -390,6 +390,12 @@ async function verifyPosts(ids: number[] | null) {
     const state = r.state === "unreadable" ? (layoutBroke ? "error" : "gone") : r.state;
     const upd: any = { checked_at: now, check_note: r.note };
     let change = "";
+    if (dry) {
+      // Report only: suggest what to switch, change nothing.
+      const propose = state === "ok" ? (jb.status === "inactive" ? "on" : "") : (jb.status === "live" && state === "gone" ? "off" : "");
+      out.push({ id: jb.id, title: jb.title, state, note: r.note, propose, status: jb.status });
+      continue;
+    }
     if (state === "ok") {
       upd.check_fails = 0;
       if (jb.status === "inactive" && jb.auto_inactive) { upd.status = "live"; upd.auto_inactive = false; upd.check_note = "Posting is open again: switched back on"; change = "back on"; }
@@ -401,7 +407,7 @@ async function verifyPosts(ids: number[] | null) {
     await db.from("rj_jobs").update(upd).eq("id", jb.id);
     out.push({ id: jb.id, title: jb.title, state, note: upd.check_note, change, status: upd.status || jb.status });
   }
-  if (!ids) await db.from("rj_config").upsert({ k: "last_check", v: JSON.stringify({ at: now, checked: list.length, off: out.filter((o) => o.change === "switched off").length, on: out.filter((o) => o.change === "back on").length, layout_warning: layoutBroke }) });
+  if (!ids && !dry) await db.from("rj_config").upsert({ k: "last_check", v: JSON.stringify({ at: now, checked: list.length, off: out.filter((o) => o.change === "switched off").length, on: out.filter((o) => o.change === "back on").length, layout_warning: layoutBroke }) });
   return { ok: true, checked: list.length, layout_warning: layoutBroke, jobs: out };
 }
 
@@ -537,7 +543,17 @@ async function admin(b: any, email: string) {
     const { data, error } = await db.from("rj_jobs").update({ eligibility: e, threads: t, updated_at: new Date().toISOString() }).eq("id", jb.id).select("*").single();
     return error ? j({ error: error.message }, 500) : j({ job: data });
   }
-  if (a === "check") return j(await verifyPosts(b.id ? [Number(b.id) || 0] : null));
+  if (a === "check") return j(await verifyPosts(b.id ? [Number(b.id) || 0] : null, !!b.dry));
+  if (a === "check_apply") {
+    // Dijae confirmed the scan results: switch the chosen roles off (live -> inactive) or back on (inactive -> live).
+    const ids = (v: unknown) => (Array.isArray(v) ? v : []).map((x) => Number(x) || 0).filter(Boolean).slice(0, 300);
+    const off = ids(b.off), on = ids(b.on), now = new Date().toISOString();
+    const notes: Record<string, string> = b.notes && typeof b.notes === "object" ? b.notes : {};
+    for (const id of off) await db.from("rj_jobs").update({ status: "inactive", auto_inactive: true, checked_at: now, check_note: String(notes[id] || "Switched off after link check").slice(0, 200) }).eq("id", id).eq("status", "live");
+    for (const id of on) await db.from("rj_jobs").update({ status: "live", auto_inactive: false, check_fails: 0, checked_at: now, check_note: "Posting is open again: switched back on" }).eq("id", id).eq("status", "inactive");
+    await db.from("rj_config").upsert({ k: "last_check", v: JSON.stringify({ at: now, checked: Number(b.checked) || off.length + on.length, off: off.length, on: on.length, layout_warning: false }) });
+    return j({ ok: true, off: off.length, on: on.length });
+  }
   if (a === "last_check") return j({ last: JSON.parse((await cfg()).last_check || "null") });
   if (a === "rethread") {
     const { data: jb } = await db.from("rj_jobs").select("*").eq("id", Number(b.id) || 0).maybeSingle();

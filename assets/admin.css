@@ -145,3 +145,17 @@ tr.dup td { background: color-mix(in srgb, var(--warn) 8%, transparent); }
 .ctag { display: block; margin: 4px 0 2px; font-size: .8rem; font-weight: 600; color: var(--warn); }
 .ctag.off { color: var(--bad); }
 .lcheck { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; justify-content: space-between; margin: 10px 0 4px; padding: 8px 12px; border: 1px dashed var(--line); border-radius: 12px; font-size: .86rem; color: var(--ink-2); }
+/* link scan review */
+.sheet.scan { width: min(640px, 100%); }
+.mbody.one { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+.scan h3 { margin: 0 0 4px; font-size: 1rem; }
+.ssum { display: grid; grid-template-columns: repeat(auto-fit, minmax(72px, 1fr)); gap: 8px; }
+.ssum > div { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; background: var(--paper); }
+.ssum b { display: block; font-size: 1.5rem; line-height: 1.1; }
+.ssum span { font-size: .82rem; color: var(--ink-2); }
+.ssum .sbad b { color: var(--bad); } .ssum .sgood b { color: var(--pay); } .ssum .swarn b { color: var(--warn); }
+.srow { display: flex; gap: 10px; align-items: flex-start; padding: 10px 2px; border-top: 1px solid var(--line); cursor: pointer; }
+.srow input { width: 20px; height: 20px; margin-top: 2px; accent-color: var(--accent); flex: none; }
+.srow b { display: block; font-size: .95rem; } .srow small { color: var(--ink-2); }
+.sfoot { border-top: 1px solid var(--line); border-bottom: 0; padding-top: 12px; padding-bottom: max(12px, env(safe-area-inset-bottom)); }
+@media (max-width: 560px) { .sfoot { grid-template-columns: 1fr; } .sfoot .btn { min-height: 48px; } }
