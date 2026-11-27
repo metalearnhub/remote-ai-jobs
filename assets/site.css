@@ -138,6 +138,26 @@ details.faq p { margin: 10px 0 0; color: var(--ink-2); }
 .fchip.on { background: var(--ink); color: var(--paper); border-color: var(--ink); }
 .fchip.on i { color: inherit; opacity: .75; }
 #fskill .fchip { font-size: .82rem; padding: 5px 11px; }
+.swrow { gap: 8px; }
+.sw { display: inline-flex; align-items: center; gap: 9px; min-height: 40px; padding: 4px 12px 4px 6px; border: 1.5px solid var(--line); border-radius: 99px; background: var(--surface); font-weight: 700; font-size: .9rem; cursor: pointer; user-select: none; white-space: nowrap; }
+.sw i { font-style: normal; color: var(--ink-2); font-weight: 500; }
+.sw input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.sw .tr { position: relative; width: 38px; height: 22px; border-radius: 99px; background: var(--line); transition: background .15s; flex: none; }
+.sw .tr::after { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.25); transition: transform .15s; }
+.sw input:checked + .tr { background: var(--pay); }
+.sw input:checked + .tr::after { transform: translateX(16px); }
+.sw:has(input:checked) { border-color: var(--pay); background: var(--pay-soft); }
+.sw input:focus-visible + .tr { outline: 3px solid var(--accent); outline-offset: 2px; }
+.gone { border: 1.5px solid var(--warn); background: color-mix(in srgb, var(--warn) 9%, var(--surface)); border-radius: var(--r-m); padding: 16px 18px; margin: 10px 0 18px; }
+.gone h2 { margin: 0 0 4px; font-size: 1.15rem; }
+.gone p { margin: 0 0 12px; color: var(--ink-2); }
+.alts { display: grid; gap: 10px; margin: 10px 0; }
+.alts a { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 10px; align-items: center; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; text-decoration: none; color: inherit; }
+.alts a:hover { border-color: var(--ink); }
+.alts b { display: block; }
+.alts small { color: var(--ink-2); }
+.alts .p { color: var(--pay); font-weight: 800; white-space: nowrap; }
+.catlinks { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 .tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
 .tags span { font-size: .78rem; font-weight: 600; color: var(--ink-2); border: 1px solid var(--line); border-radius: 8px; padding: 3px 8px; }
 .row.between { display: flex; justify-content: space-between; }

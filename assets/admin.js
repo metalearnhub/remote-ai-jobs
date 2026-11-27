@@ -66,6 +66,10 @@
   }
 
   const whereCls = (e) => (!e ? 'wr' : e.kind === 'countries' ? 'wc' : e.kind === 'worldwide' ? 'ww' : 'wr');
+  const usTied = (j) => { const e = j.eligibility; if (!e) return false; return (e.countries || []).includes('United States') || /U\.S\./.test(e.label || '') || /U\.S\. (bar|law|military)|eligible to work in the U\.S/.test(e.note || ''); };
+  const wMatch = (j, k) => !k || (k === 'countries' ? (j.eligibility || {}).kind === 'countries' : k === 'us' ? usTied(j) : (j.eligibility || {}).kind !== 'countries' && !usTied(j));
+  const ago = (t) => { if (!t) return 'never'; const m = Math.round((Date.now() - Date.parse(t)) / 60000); return m < 60 ? m + ' min ago' : m < 1440 ? Math.round(m / 60) + ' h ago' : Math.round(m / 1440) + ' d ago'; };
+  const checkTag = (j) => (j.status === 'inactive' || (j.check_fails && j.check_note) ? `<span class="ctag${j.status === 'inactive' ? ' off' : ''}">${j.status === 'inactive' ? (j.auto_inactive ? '⛔ Switched off by link check: ' : '⛔ ') : '⚠ '}${esc(j.check_note || 'Hidden from the board')}</span>` : '');
   const whereTag = (j) => (j.eligibility && j.eligibility.label ? `<span class="wtag ${whereCls(j.eligibility)}" title="${esc(j.eligibility.note || '')}">${esc(j.eligibility.label)}</span>` : '');
   let JF = { q: '', st: '', w: '' };
   async function viewJobs() {
@@ -77,18 +81,31 @@
     app.innerHTML = `<div class="adm"><div class="row between"><h1>Jobs</h1><a class="btn primary sm hm" href="#new">+ Add job</a></div>
       <div class="stats mini"><div><b>${live.length}</b><span>live</span></div><div><b>${v}</b><span>views</span></div><div><b>${a}</b><span>applies</span></div><div><b>${v ? Math.round(a / v * 100) : 0}%</b><span>view→apply</span></div></div>
       <div class="jtools"><input type="search" id="jq" placeholder="Search roles" value="${esc(JF.q)}" aria-label="Search roles">
-      <div class="jchips" role="group" aria-label="Filter by who can apply" data-g="w">${[['', 'Anywhere'], ['open', '🌍 Open to all'], ['countries', '📍 Country-only']].map(([k, l]) => `<button type="button" data-w="${k}" class="${JF.w === k ? 'on' : ''}">${l} <i>${JOBS.filter((j) => !k || (k === 'countries' ? (j.eligibility || {}).kind === 'countries' : (j.eligibility || {}).kind !== 'countries')).length}</i></button>`).join('')}</div>
-      <div class="jchips" role="group" aria-label="Filter by status">${[['', 'All'], ['live', 'Live'], ['draft', 'Draft'], ['closed', 'Closed']].map(([k, l]) => `<button type="button" data-st="${k}" class="${JF.st === k ? 'on' : ''}">${l} <i>${cnt(k)}</i></button>`).join('')}</div></div>
+      <div class="jchips" role="group" aria-label="Filter by who can apply" data-g="w">${[['', 'Anywhere'], ['open', '🌍 Open to all'], ['countries', '📍 Country-only'], ['us', '🇺🇸 US-tied']].map(([k, l]) => `<button type="button" data-w="${k}" class="${JF.w === k ? 'on' : ''}">${l} <i>${JOBS.filter((j) => wMatch(j, k)).length}</i></button>`).join('')}</div>
+      <div class="jchips" role="group" aria-label="Filter by status">${[['', 'All'], ['live', 'Live'], ['inactive', 'Inactive'], ['draft', 'Draft'], ['closed', 'Closed']].map(([k, l]) => `<button type="button" data-st="${k}" class="${JF.st === k ? 'on' : ''}">${l} <i>${cnt(k)}</i></button>`).join('')}</div></div>
+      <div class="lcheck" id="lcheck"><span>🔎 Link check runs daily · last: <b id="lcAt">…</b></span><button class="btn ghost sm" id="lcRun">Check all now</button></div>
       <div id="jlist"></div>
       <details class="hint fold"><summary>Daily routine (≈1 min)</summary>In your referral dashboard, click "Refer and earn" on 1–3 roles, copy the links, and paste them into <a href="#new">Add links</a>. Everything else is written for you. (The dashboard itself stays manual: its terms don't allow automated tools.)</details></div>`;
     const draw = () => {
       const q = JF.q.toLowerCase();
-      const xs = JOBS.filter((j) => (!JF.st || j.status === JF.st) && (!JF.w || (JF.w === 'countries') === ((j.eligibility || {}).kind === 'countries')) && (!q || (j.title + ' ' + j.domain + ' ' + (j.pay_text || '') + ' ' + ((j.eligibility || {}).label || '')).toLowerCase().includes(q)));
+      const xs = JOBS.filter((j) => (!JF.st || j.status === JF.st) && wMatch(j, JF.w) && (!q || (j.title + ' ' + j.domain + ' ' + (j.pay_text || '') + ' ' + ((j.eligibility || {}).label || '')).toLowerCase().includes(q)));
       $('#jlist').innerHTML = !JOBS.length ? '<p class="muted">No jobs yet. <a href="#new">Add your first one</a>.</p>' : !xs.length ? '<p class="muted" style="padding:14px 2px">No roles match.</p>' :
-        `<div class="jl">${xs.map((j) => `<article class="jrow"><div class="jmain"><b>${esc(j.title)}</b>${whereTag(j)}<span class="jmeta"><span class="pill ${j.status}">${j.status}</span>${esc(j.pay_text || '')}<span class="dot">·</span>${esc(j.domain)}<span class="dot">·</span>${j.views} views · ${j.applies} applies</span></div>
-          <div class="jact"><button class="btn primary sm" data-posts="${j.id}">Posts</button><button class="btn ghost sm" data-copy="${esc(pageUrl(j))}">Copy link</button>${j.status !== 'draft' ? `<a class="btn ghost sm" target="_blank" rel="noopener" href="${esc(pageUrl(j))}">Open</a>` : ''}<a class="btn ghost sm" href="#edit-${j.id}">Edit</a></div></article>`).join('')}</div>`;
+        `<div class="jl">${xs.map((j) => `<article class="jrow"><div class="jmain"><b>${esc(j.title)}</b>${whereTag(j)}${checkTag(j)}<span class="jmeta"><span class="pill ${j.status}">${j.status}</span>${esc(j.pay_text || '')}<span class="dot">·</span>${esc(j.domain)}<span class="dot">·</span>${j.views} views · ${j.applies} applies</span></div>
+          <div class="jact"><button class="btn primary sm" data-posts="${j.id}">Posts</button><button class="btn ghost sm" data-copy="${esc(pageUrl(j))}">Copy link</button>${j.status !== 'draft' ? `<a class="btn ghost sm" target="_blank" rel="noopener" href="${esc(pageUrl(j))}">Open</a>` : ''}<button class="btn ghost sm" data-chk="${j.id}" title="Checked ${esc(ago(j.checked_at))}">Check link</button><a class="btn ghost sm" href="#edit-${j.id}">Edit</a></div></article>`).join('')}</div>`;
       $$('#jlist [data-copy]').forEach((b) => b.onclick = async () => { await copy(b.dataset.copy); flash(b); });
       $$('#jlist [data-posts]').forEach((b) => b.onclick = () => openPosts(+b.dataset.posts));
+      $$('#jlist [data-chk]').forEach((b) => b.onclick = async () => {
+        b.disabled = true; b.textContent = 'Checking…';
+        try { const d = await api({ action: 'check', id: +b.dataset.chk }); const r = (d.jobs || [])[0] || {}; await refresh(); draw(); toast(r.state === 'ok' ? (r.change ? 'Open again: back on the board' : 'Link OK: posting is open') : r.change ? 'Not found: switched to inactive' : 'Problem: ' + (r.note || 'could not verify')); }
+        catch (e) { toast(e.message); b.disabled = false; b.textContent = 'Check link'; }
+      });
+    };
+    api({ action: 'last_check' }).then((d) => { const l = d.last; $('#lcAt').textContent = l ? `${ago(l.at)} · ${l.checked} checked · ${l.off} switched off · ${l.on} back on${l.layout_warning ? ' · ⚠ pages unreadable, nothing switched off' : ''}` : 'not run yet'; }).catch(() => {});
+    $('#lcRun').onclick = async () => {
+      const b = $('#lcRun'); b.disabled = true; b.textContent = 'Checking all… (~1 min)';
+      try { const d = await api({ action: 'check' }); await refresh(); draw(); const off = (d.jobs || []).filter((x) => x.change === 'switched off').length, on = (d.jobs || []).filter((x) => x.change === 'back on').length; $('#lcAt').textContent = `just now · ${d.checked} checked · ${off} switched off · ${on} back on`; toast(`${d.checked} checked · ${off} off · ${on} back on`); }
+      catch (e) { toast(e.message); }
+      b.disabled = false; b.textContent = 'Check all now';
     };
     $('#jq').oninput = (e) => { JF.q = e.target.value; draw(); };
     $$('.jchips button[data-st]').forEach((b) => b.onclick = () => { JF.st = b.dataset.st; $$('.jchips button[data-st]').forEach((x) => x.classList.toggle('on', x === b)); draw(); });

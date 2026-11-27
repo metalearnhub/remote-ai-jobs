@@ -21,7 +21,7 @@ function shell({ title, desc, url, body, robots = 'index,follow', jsonld = '', i
 <meta property="og:image" content="${esc(image)}"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:alt" content="${esc(alt)}">
 <meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="${esc(title)}"><meta name="twitter:description" content="${esc(desc)}"><meta name="twitter:image" content="${esc(image)}"><meta name="twitter:image:alt" content="${esc(alt)}">
 <meta name="theme-color" content="#4B2EE8"><link rel="icon" href="/assets/icon.svg" type="image/svg+xml"><link rel="icon" href="/assets/favicon-32.png" sizes="32x32" type="image/png"><link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
-<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="/assets/site.css?v=202611272200">${jsonld}</head>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="/assets/site.css?v=202611272300">${jsonld}</head>
 <body>${body}</body></html>`;
 }
 
@@ -29,12 +29,32 @@ const BAR = `<header class="bar"><div class="wrap"><a class="logo" href="/"><img
 <nav aria-label="Main"><a href="/"><span class="hide-s">Open roles</span><span class="show-s">Roles</span></a><a href="/guide"><span class="hide-s">Free guide</span><span class="show-s">Guide</span></a><a class="hide-m" href="/privacy">Disclosure</a></nav></div></header><script src="/assets/nav.js?v=202611220800" defer></script>`;
 const FOOT = `<footer class="foot"><div class="wrap">Independent job page by Dijae Dadula. Not affiliated with, sponsored by or endorsed by micro1 or any employer. Some links are referral links, and I may earn a referral bonus if you're hired. Pay, openings and requirements are as posted and can change; nothing here guarantees an interview, placement or pay. <a href="/privacy">Privacy & disclosure</a> · <a href="/guide">Free guide</a></div></footer>`;
 
-function notFound() {
-  return shell({ title: 'Role not found · Remote AI Work', desc: 'This role is no longer listed.', url: SITE, robots: 'noindex',
-    body: `${BAR}<main class="wrap article"><h1>This role isn't listed any more</h1><p class="muted">It may have closed. See the roles that are open right now.</p><p><a class="btn primary" href="/">See open roles</a></p></main>${FOOT}` });
+const catSlug = (s) => String(s || '').toLowerCase().replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80);
+const tagsOf = (j) => (j.tags && j.tags.length ? j.tags : (j.skills || []).slice(0, 3));
+// Open roles like this one: same field first, then shared skills, then newest.
+function similar(j, live) {
+  const tags = new Set(tagsOf(j || {}));
+  const score = (x) => (j && x.domain === j.domain ? 10 : 0) + tagsOf(x).filter((t) => tags.has(t)).length;
+  return (live || []).filter((x) => !j || x.slug !== j.slug).map((x) => [score(x), x]).sort((a, b) => b[0] - a[0]).slice(0, 4).map((p) => p[1]);
+}
+function altList(xs) {
+  return xs.length ? `<div class="alts">${xs.map((x) => `<a href="/j/${esc(x.slug)}"><span><b>${esc(x.title)}</b><small>${esc(x.domain)}${whereOf(x) ? ' · ' + esc(whereOf(x).short) : ''}</small></span><span class="p">${esc(x.pay_text || '')}</span></a>`).join('')}</div>` : '';
+}
+function catLinks(live) {
+  const c = {}; for (const x of live || []) c[x.domain] = (c[x.domain] || 0) + 1;
+  return `<div class="catlinks">${Object.entries(c).sort((a, b) => b[1] - a[1]).map(([d, n]) => `<a class="fchip" href="/c/${catSlug(d)}">${esc(d)} <i>${n}</i></a>`).join('')}</div>`;
+}
+async function liveJobs() {
+  try { const r = await fetch(`${FN}?a=list`); return r.ok ? ((await r.json()).jobs || []) : []; } catch (_) { return []; }
 }
 
-function render(j) {
+function notFound(live = []) {
+  return shell({ title: 'Role not available · Remote AI Work', desc: 'This role is no longer listed. See similar open remote AI roles.', url: SITE, robots: 'noindex',
+    body: `${BAR}<main class="wrap article"><div class="gone"><h2>This role may be filled or no longer available</h2><p>The link you saved points to a role that isn't listed any more. It may have been filled, closed or removed by the hiring platform.</p><a class="btn primary" href="/">See all open roles</a></div>
+    ${live.length ? `<h2>Open right now</h2>${altList(live.slice(0, 4))}<h2 style="margin-top:22px">Browse by field</h2>${catLinks(live)}` : ''}</main>${FOOT}` });
+}
+
+function render(j, live = []) {
   const url = `${SITE}/j/${j.slug}`;
   const closed = j.status !== 'live';
   const company = j.company || 'micro1';
@@ -53,7 +73,8 @@ function render(j) {
 <main class="wrap job" data-slug="${esc(j.slug)}" data-status="${esc(j.status)}" data-company="${esc(company)}">
   <article>
     <p class="crumbs"><a href="/">Open roles</a> / <a href="/?d=${encodeURIComponent(j.domain)}">${esc(j.domain)}</a></p>
-    <div class="chips"><a class="chip dom" href="/?d=${encodeURIComponent(j.domain)}">${esc(j.domain)}</a><span class="chip">${esc(j.job_type || 'Remote')}</span>${j.openings ? `<span class="chip">${esc(j.openings)}</span>` : ''}${closed ? '<span class="chip closed">Closed</span>' : ''}</div>
+    <div class="chips"><a class="chip dom" href="/?d=${encodeURIComponent(j.domain)}">${esc(j.domain)}</a><span class="chip">${esc(j.job_type || 'Remote')}</span>${j.openings ? `<span class="chip">${esc(j.openings)}</span>` : ''}${closed ? '<span class="chip closed">Not available</span>' : ''}</div>
+    ${closed ? (() => { const alts = similar(j, live); const same = live.filter((x) => x.domain === j.domain).length; return `<div class="gone"><h2>This role may be filled or no longer available</h2><p>${j.status === 'inactive' ? "I couldn't verify this posting on the hiring platform any more. It may have been filled or taken down." : 'This role has closed.'} The details below are kept for reference only.</p>${alts.length ? `<b>Similar roles open now</b>${altList(alts)}` : ''}<div class="row">${same ? `<a class="btn primary" href="/c/${catSlug(j.domain)}">See ${same} open ${esc(j.domain)} role${same === 1 ? '' : 's'}</a>` : ''}<a class="btn ghost" href="/">All open roles</a></div></div>`; })() : ''}
     <h1>${esc(j.title)}</h1>
     ${whereBadge(W, true)}
     ${j.about ? `<p class="lead-p">${esc(j.about)}</p>` : ''}
@@ -78,10 +99,10 @@ function render(j) {
   </article>
   <aside>
     <div class="pass" id="pass">
-      <div class="pass-top"><small>${closed ? 'This role is closed' : 'Pay as posted'}</small>${W ? `<span class="pwhere ${whereCls(W)}">${esc(W.short)}</span>` : ''}<div class="rate ${String(j.pay_text || '').length > 16 ? 'sm' : ''}">${esc(j.pay_text || 'See posting')}</div><div class="role">${esc(j.title)}</div></div>
+      <div class="pass-top"><small>${closed ? 'Not available any more' : 'Pay as posted'}</small>${W ? `<span class="pwhere ${whereCls(W)}">${esc(W.short)}</span>` : ''}<div class="rate ${String(j.pay_text || '').length > 16 ? 'sm' : ''}">${esc(j.pay_text || 'See posting')}</div><div class="role">${esc(j.title)}</div></div>
       <div class="perf"></div>
       <div class="pass-body" id="passBody">
-        ${closed ? `<h3>This role has closed</h3><p class="muted small">Get the next one like it in your inbox.</p>` : `<h3>Apply on ${esc(company)}</h3><p class="muted small">Enter your email to get the application link. You'll go straight to ${esc(company)}'s official page.</p>`}
+        ${closed ? `<h3>This role may be filled</h3><p class="muted small">Get the next ${esc(j.domain)} role like it in your inbox.</p>` : `<h3>Apply on ${esc(company)}</h3><p class="muted small">Enter your email to get the application link. You'll go straight to ${esc(company)}'s official page.</p>`}
         <form id="capture" novalidate>
           <input type="email" id="email" name="email" placeholder="you@email.com" autocomplete="email" required aria-label="Email address">
           <div class="hp" aria-hidden="true"><input tabindex="-1" name="website" id="website" autocomplete="off"></div>
@@ -105,14 +126,15 @@ ${FOOT}
 module.exports = async (req, res) => {
   const slug = String((req.query && req.query.slug) || '').toLowerCase();
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
-  if (!/^[a-z0-9-]{2,90}$/.test(slug)) { res.statusCode = 404; return res.end(notFound()); }
+  if (!/^[a-z0-9-]{2,90}$/.test(slug)) { res.statusCode = 404; return res.end(notFound(await liveJobs())); }
   try {
     const r = await fetch(`${FN}?a=job&slug=${encodeURIComponent(slug)}`);
-    if (!r.ok) { res.statusCode = 404; return res.end(notFound()); }
+    if (!r.ok) { res.statusCode = 404; res.setHeader('Cache-Control', 's-maxage=60'); return res.end(notFound(await liveJobs())); }
     const { job } = await r.json();
     res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=600');
     if (!job.status || job.status !== 'live') res.setHeader('X-Robots-Tag', 'noindex');
-    return res.end(render(job).replace('<body>', `<body class="${job.status === 'live' ? 'has-cta' : ''}">`));
+    const live = job.status === 'live' ? [] : await liveJobs();
+    return res.end(render(job, live).replace('<body>', `<body class="${job.status === 'live' ? 'has-cta' : ''}">`));
   } catch (e) {
     res.statusCode = 500;
     return res.end(notFound());

@@ -141,3 +141,7 @@ tr.dup td { background: color-mix(in srgb, var(--warn) 8%, transparent); }
 .wtag.wc { background: #FFF1D6; color: #7A4300; } .wtag.ww { background: var(--pay-soft); color: var(--pay); } .wtag.wr { background: var(--accent-soft); color: var(--accent); }
 @media (prefers-color-scheme: dark) { .wtag.wc { background: #3A2A0E; color: #F5C46B; } }
 .mhead .wtag { margin-top: 6px; }
+.pill.inactive { background: color-mix(in srgb, var(--warn) 16%, var(--surface)); color: var(--warn); }
+.ctag { display: block; margin: 4px 0 2px; font-size: .8rem; font-weight: 600; color: var(--warn); }
+.ctag.off { color: var(--bad); }
+.lcheck { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; justify-content: space-between; margin: 10px 0 4px; padding: 8px 12px; border: 1px dashed var(--line); border-radius: 12px; font-size: .86rem; color: var(--ink-2); }

@@ -354,6 +354,57 @@ async function whereAll() {
   return { ok: true, jobs: out };
 }
 
+// ---------- daily link check ----------
+// Opens each saved jobs.micro1.ai/post/<id> page (links Dijae submitted; never the referral portal) and marks the
+// role "inactive" when the posting is gone, closed or can't be verified, so it drops off the board. A role that was
+// switched off automatically switches back on when its posting is open again.
+async function checkPost(jb: any) {
+  const m = String(jb.referral_url || "").match(POST_RE);
+  if (!m) return { state: "gone", note: "Saved link isn't a jobs.micro1.ai post link" };
+  let r: Response;
+  try {
+    r = await fetch(`https://jobs.micro1.ai/post/${m[1].toLowerCase()}`, { headers: { "User-Agent": "Mozilla/5.0 (compatible; RemoteAIWork/1.0; +https://jobs.dijaedadula.com)", "Accept": "text/html" }, redirect: "follow", signal: AbortSignal.timeout(20000) });
+  } catch (_) { return { state: "error", note: "Couldn't reach the posting" }; }
+  if (r.status === 404 || r.status === 410) return { state: "gone", note: `Posting not found (${r.status})` };
+  if (!r.ok) return { state: "error", note: `Posting answered ${r.status}` };
+  const x = extract(await r.text());
+  if (!x || !x.title) return { state: "unreadable", note: "Posting page shows no job (removed or can't be verified)" };
+  if (x.status !== "open") return { state: "gone", note: `Closed on micro1 (${x.status})` };
+  return { state: "ok", note: null };
+}
+async function verifyPosts(ids: number[] | null) {
+  let q = db.from("rj_jobs").select("id,title,status,referral_url,check_fails,auto_inactive").in("status", ["live", "inactive"]).order("checked_at", { ascending: true, nullsFirst: true }).limit(150);
+  if (ids && ids.length) q = db.from("rj_jobs").select("id,title,status,referral_url,check_fails,auto_inactive").in("id", ids);
+  const { data: jobs } = await q;
+  const list = jobs || [];
+  const res: any[] = new Array(list.length);
+  let i = 0;
+  await Promise.all(Array.from({ length: 6 }, async () => { while (i < list.length) { const k = i++; res[k] = await checkPost(list[k]); } }));
+  // If most pages suddenly can't be read, micro1 probably changed its layout: don't switch everything off.
+  const unread = res.filter((r) => r.state === "unreadable").length;
+  const layoutBroke = !ids && unread > 5 && unread > list.length / 2;
+  const now = new Date().toISOString();
+  const out: any[] = [];
+  for (let k = 0; k < list.length; k++) {
+    const jb = list[k], r = res[k];
+    const state = r.state === "unreadable" ? (layoutBroke ? "error" : "gone") : r.state;
+    const upd: any = { checked_at: now, check_note: r.note };
+    let change = "";
+    if (state === "ok") {
+      upd.check_fails = 0;
+      if (jb.status === "inactive" && jb.auto_inactive) { upd.status = "live"; upd.auto_inactive = false; upd.check_note = "Posting is open again: switched back on"; change = "back on"; }
+    } else {
+      const fails = (jb.check_fails || 0) + 1;
+      upd.check_fails = fails;
+      if (jb.status === "live" && (state === "gone" || fails >= 2)) { upd.status = "inactive"; upd.auto_inactive = true; change = "switched off"; }
+    }
+    await db.from("rj_jobs").update(upd).eq("id", jb.id);
+    out.push({ id: jb.id, title: jb.title, state, note: upd.check_note, change, status: upd.status || jb.status });
+  }
+  if (!ids) await db.from("rj_config").upsert({ k: "last_check", v: JSON.stringify({ at: now, checked: list.length, off: out.filter((o) => o.change === "switched off").length, on: out.filter((o) => o.change === "back on").length, layout_warning: layoutBroke }) });
+  return { ok: true, checked: list.length, layout_warning: layoutBroke, jobs: out };
+}
+
 // ---------- admin ----------
 async function mailCode(to: string, code: string) {
   const t = transport(); if (!t) return false;
@@ -421,6 +472,8 @@ async function admin(b: any, email: string) {
     if (!o.slug || !SLUG.test(o.slug)) return j({ error: "The page address (slug) is missing or invalid." }, 400);
     if (o.status === "live" && !o.referral_url) return j({ error: "Paste your referral link before publishing." }, 400);
     o.updated_at = new Date().toISOString();
+    o.auto_inactive = false;
+    if (o.status === "live") o.check_fails = 0;
     const id = Number(b.job?.id) || 0;
     if (id) {
       const { data: prev } = await db.from("rj_jobs").select("status,published_at").eq("id", id).single();
@@ -484,6 +537,8 @@ async function admin(b: any, email: string) {
     const { data, error } = await db.from("rj_jobs").update({ eligibility: e, threads: t, updated_at: new Date().toISOString() }).eq("id", jb.id).select("*").single();
     return error ? j({ error: error.message }, 500) : j({ job: data });
   }
+  if (a === "check") return j(await verifyPosts(b.id ? [Number(b.id) || 0] : null));
+  if (a === "last_check") return j({ last: JSON.parse((await cfg()).last_check || "null") });
   if (a === "rethread") {
     const { data: jb } = await db.from("rj_jobs").select("*").eq("id", Number(b.id) || 0).maybeSingle();
     if (!jb) return j({ error: "Job not found." }, 404);
@@ -547,7 +602,7 @@ Deno.serve(async (req) => {
       if (a === "job") {
         const slug = url.searchParams.get("slug") || "";
         if (!SLUG.test(slug)) return j({ error: "not found" }, 404);
-        const { data } = await db.from("rj_jobs").select(PUBLIC_COLS).eq("slug", slug).in("status", ["live", "closed"]).maybeSingle();
+        const { data } = await db.from("rj_jobs").select(PUBLIC_COLS).eq("slug", slug).in("status", ["live", "closed", "inactive"]).maybeSingle();
         if (!data) return j({ error: "not found" }, 404);
         return j({ job: data }, 200, "public, max-age=60");
       }
@@ -579,6 +634,7 @@ Deno.serve(async (req) => {
       if (b.retag_all) return j(await retagAll());
       if (b.hash_all) return j(await hashAll());
       if (b.where_all) return j(await whereAll());
+      if (b.verify_all) return j(await verifyPosts(null));
       return j(await ingest(b.urls, !!b.refresh, !!b.force, !!b.rebuild));
     }
     const email = String(b.email || "").trim().toLowerCase();

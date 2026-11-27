@@ -63,7 +63,7 @@ function render(slug, c) {
   </div>
 </main>
 ${FOOT}
-<script>window.RJ_FN=${JSON.stringify(FN)};window.RJ_CAT=${JSON.stringify({ k: c.kind, v: c.name, slug }).replace(/</g, '\\u003c')};</script><script src="/assets/share.js?v=202611211330" defer></script><script src="/assets/board.js?v=202611272200" defer></script>`;
+<script>window.RJ_FN=${JSON.stringify(FN)};window.RJ_CAT=${JSON.stringify({ k: c.kind, v: c.name, slug }).replace(/</g, '\\u003c')};</script><script src="/assets/share.js?v=202611211330" defer></script><script src="/assets/board.js?v=202611272300" defer></script>`;
   const ld = { '@context': 'https://schema.org', '@type': 'CollectionPage', name: `Remote AI roles in ${c.name}`, url, mainEntity: { '@type': 'ItemList', itemListElement: c.jobs.map((j, i) => ({ '@type': 'ListItem', position: i + 1, url: `${SITE}/j/${j.slug}`, name: j.title })) } };
   const crumbs = { '@context': 'https://schema.org', '@type': 'BreadcrumbList', itemListElement: [{ '@type': 'ListItem', position: 1, name: 'Open roles', item: SITE + '/' }, { '@type': 'ListItem', position: 2, name: c.name, item: url }] };
   const jsonld = [ld, crumbs].map((o) => `<script type="application/ld+json">${JSON.stringify(o).replace(/</g, '\\u003c')}</script>`).join('');
