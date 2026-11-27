@@ -413,10 +413,14 @@
     await refresh();
     const live = JOBS.filter((j) => j.status === 'live');
     app.innerHTML = `<div class="adm"><h1>Job alert email</h1><p class="muted">Sends to everyone subscribed to job alerts, from your usual sender, with a one-click unsubscribe. Send at most once or twice a week.</p>
+      <div class="lcheck" id="auto"><span>⚡ <b>Auto-send new roles</b> · each new live role is emailed ~10–25 min after it goes live, only to people whose alert choices match. <span id="autoq"></span></span><button class="btn sm" id="autoBtn">…</button></div>
       <div class="panel"><b>Roles to include</b><div style="display:grid;gap:8px;margin:10px 0">${live.map((j) => `<label class="check"><input type="checkbox" value="${esc(j.slug)}"> <span><b>${esc(j.title)}</b> · ${esc(j.pay_text || '')}</span></label>`).join('') || '<span class="muted">No live roles.</span>'}</div>
       <label class="f">Subject<input type="text" id="sub" placeholder="New remote AI role: …"></label>
       <div class="row" style="margin-top:12px"><button class="btn ghost" id="test">Send a test to me</button><button class="btn primary" id="send">Send to all subscribers</button></div>
       <div class="prog" style="margin-top:14px" hidden id="pg"><i></i></div><p class="muted small" id="pst"></p><p class="err" id="aerr" hidden></p></div></div>`;
+    const drawAuto = (d) => { const b = $('#autoBtn'); b.textContent = d.on ? 'On · turn off' : 'Off · turn on'; b.className = 'btn sm ' + (d.on ? 'primary' : 'ghost'); b.dataset.on = d.on ? '1' : ''; $('#autoq').textContent = d.queued && d.queued.length ? `Waiting to send: ${d.queued.join(', ')}.` : 'Nothing waiting.'; };
+    api({ action: 'auto_get' }).then(drawAuto).catch(() => {});
+    $('#autoBtn').onclick = async () => { const on = !$('#autoBtn').dataset.on; try { await api({ action: 'auto_set', on }); drawAuto(await api({ action: 'auto_get' })); toast(on ? 'Auto-send is on' : 'Auto-send is off'); } catch (e) { toast(e.message); } };
     const pick = () => $$('input[type=checkbox]:checked', app).map((x) => x.value);
     $$('input[type=checkbox]', app).forEach((c) => c.onchange = () => { const p = pick(); if (p.length && !$('#sub').value) { const j = live.find((x) => x.slug === p[0]); $('#sub').value = `New remote AI role: ${j.title}${j.pay_text ? ` (${j.pay_text})` : ''}`; } });
     const err = (m) => { const e = $('#aerr'); e.textContent = m; e.hidden = !m; };

@@ -629,6 +629,8 @@ async function admin(b: any, email: string) {
     await db.from("rj_config").upsert({ k: "last_check", v: JSON.stringify({ at: now, checked: Number(b.checked) || off.length + on.length, off: off.length, on: on.length, layout_warning: false }) });
     return j({ ok: true, off: off.length, on: on.length });
   }
+  if (a === "auto_get") { const c = await cfg(); const { data: q } = await db.from("rj_jobs").select("title").eq("status", "live").is("alerted_at", null); return j({ on: (c.auto_alerts || "on") !== "off", queued: (q || []).map((x: any) => x.title) }); }
+  if (a === "auto_set") { await db.from("rj_config").upsert({ k: "auto_alerts", v: b.on ? "on" : "off" }); return j({ ok: true, on: !!b.on }); }
   if (a === "last_check") return j({ last: JSON.parse((await cfg()).last_check || "null") });
   if (a === "rethread") {
     const { data: jb } = await db.from("rj_jobs").select("*").eq("id", Number(b.id) || 0).maybeSingle();
@@ -687,9 +689,28 @@ async function alertStep(id: number, test: boolean, adminEmail: string) {
   t.close();
   const remaining = todo.length - batch.length;
   const upd: any = { sent: al.sent + ok, failed: al.failed + bad };
-  if (remaining <= 0) { upd.status = "sent"; upd.finished_at = new Date().toISOString(); }
+  if (remaining <= 0) {
+    upd.status = "sent"; upd.finished_at = new Date().toISOString();
+    // These roles have now been announced: the automatic sender won't send them again.
+    await db.from("rj_jobs").update({ alerted_at: upd.finished_at }).in("slug", al.job_slugs).is("alerted_at", null);
+  }
   await db.from("rj_alerts").update(upd).eq("id", id);
   return j({ sent: upd.sent, failed: upd.failed, skipped, remaining });
+}
+
+// Automatic alerts: every 15 minutes, roles that went live at least 10 minutes ago and haven't been announced are
+// sent to each subscriber whose alert choices match (one email per person, up to 5 roles). Switch: rj_config.auto_alerts.
+async function autoAlerts() {
+  if (((await cfg()).auto_alerts || "on") === "off") return { ok: true, off: true };
+  const cutoff = new Date(Date.now() - 10 * 60000).toISOString();
+  const { data: fresh } = await db.from("rj_jobs").select("slug,title,pay_text").eq("status", "live").is("alerted_at", null).lte("published_at", cutoff).order("published_at", { ascending: true }).limit(5);
+  if (!fresh || !fresh.length) return { ok: true, sent: 0 };
+  const subject = fresh.length === 1 ? `New remote role: ${fresh[0].title}${fresh[0].pay_text ? ` (${fresh[0].pay_text})` : ""}` : `${fresh.length} new remote AI roles: ${fresh[0].title} + more`;
+  const { data: al, error } = await db.from("rj_alerts").insert({ job_slugs: fresh.map((x: any) => x.slug), subject }).select("id").single();
+  if (error || !al) return { ok: false, error: error?.message };
+  let r: any = { remaining: 1 }, skipped = 0;
+  for (let n = 0; n < 40 && r.remaining > 0; n++) { r = await (await alertStep(al.id, false, "")).json(); if (r.error) break; skipped += r.skipped || 0; }
+  return { ok: !r.error, alert: al.id, roles: fresh.map((x: any) => x.title), sent: r.sent, failed: r.failed, skipped, error: r.error };
 }
 
 Deno.serve(async (req) => {
@@ -741,6 +762,7 @@ Deno.serve(async (req) => {
       if (b.hash_all) return j(await hashAll());
       if (b.where_all) return j(await whereAll());
       if (b.verify_all) return j(await verifyPosts(null));
+      if (b.auto_alerts) return j(await autoAlerts());
       return j(await ingest(b.urls, !!b.refresh, !!b.force, !!b.rebuild));
     }
     const email = String(b.email || "").trim().toLowerCase();
