@@ -31,7 +31,8 @@ function card(j) {
       h('div', { flex: 1, flexDirection: 'column', padding: '44px 48px', justifyContent: 'space-between' }, [
         h('div', { alignItems: 'center', gap: '14px', fontSize: '28px', fontWeight: 800 }, [{ type: 'img', props: { src: logo(), width: 56, height: 56 } }, 'Remote AI Work']),
         h('div', { flexDirection: 'column', gap: '16px' }, [
-          h('div', { gap: '10px' }, [h('div', { background: '#ECE8FE', color: '#4B2EE8', borderRadius: '99px', padding: '8px 18px', fontSize: '24px', fontWeight: 800 }, String(j.domain || 'Remote AI work'))]),
+          h('div', { gap: '10px', flexWrap: 'wrap' }, [h('div', { background: '#ECE8FE', color: '#4B2EE8', borderRadius: '99px', padding: '8px 18px', fontSize: '24px', fontWeight: 800 }, String(j.domain || 'Remote AI work')),
+            ...(j.eligibility && j.eligibility.short ? [h('div', j.eligibility.kind === 'countries' ? { background: '#FFF1D6', color: '#8A4B00', borderRadius: '99px', padding: '8px 18px', fontSize: '24px', fontWeight: 800 } : { background: '#E3F4EC', color: '#0B7A52', borderRadius: '99px', padding: '8px 18px', fontSize: '24px', fontWeight: 800 }, (j.eligibility.kind === 'countries' ? '📍 ' : '🌍 ') + String(j.eligibility.short))] : [])]),
           h('div', { fontSize: `${size}px`, fontWeight: 800, lineHeight: 1.04, letterSpacing: '-1.5px' }, t),
           tags.length ? h('div', { gap: '10px' }, tags.map((x) => h('div', { border: '2px solid #DFE3E8', borderRadius: '12px', padding: '6px 14px', fontSize: '22px', fontWeight: 500, color: '#555C67' }, String(x)))) : h('div', {}, ''),
         ]),

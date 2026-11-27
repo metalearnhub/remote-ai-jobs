@@ -282,6 +282,8 @@ export function threads(job, slug, siteUrl = "https://jobs.dijaedadula.com") {
   const noAI = /no ai experience needed/i.test(job.about);
   const field = job.domain === "General AI training" ? "field" : job.domain.replace(" & ", " and ").split(" ").map((w) => (/^[A-Z]{2,}$/.test(w) ? w : w.toLowerCase())).join(" ");
   const fit = job.fit.slice(0, 3);
+  const el = job.eligibility || null;
+  const whoLine = el && el.label ? el.label : "";
   const comment = (lead) => `${lead}\n${url}\n\nReferral link: I may earn a bonus if you're hired. Pay and openings as posted.`;
   const fix = (s) => s.replace(/\n{3,}/g, "\n\n").trim();
   const cap = (s) => (s.length > 500 ? s.slice(0, 499) + "…" : s);
@@ -289,19 +291,19 @@ export function threads(job, slug, siteUrl = "https://jobs.dijaedadula.com") {
     {
       angle: "Role drop",
       tag: "Remote Jobs",
-      text: `${remote ? "Remote" : "Open"} role: ${job.title} — ${pay} (as posted).\n\nFor ${forWho}.\n\nThe work: ${work}.\n\n${noAI ? `No AI background needed. They're testing your ${field} depth.\n\n` : ""}Know someone who fits? Tag them. Link in the first comment.`,
+      text: `${remote ? "Remote" : "Open"} role: ${job.title} — ${pay} (as posted).${whoLine ? `\n${whoLine}` : ""}\n\nFor ${forWho}.\n\nThe work: ${work}.\n\n${noAI ? `No AI background needed. They're testing your ${field} depth.\n\n` : ""}Know someone who fits? Tag them. Link in the first comment.`,
       comment: comment("Full breakdown, who it fits and how to prep for the AI interview:"),
     },
     {
       angle: "Question hook",
       tag: "AI Threads",
-      text: `${Who}: would you take ${pay} to ${work}?\n\nThat's the ${job.title} role (${kind}${remote ? ", fully remote" : ""}).\n\nThe catch: ${catchOf(job)}.\n\nReply with your field and I'll point you to the closest open role.`,
+      text: `${Who}: would you take ${pay} to ${work}?\n\nThat's the ${job.title} role (${kind}${remote ? ", fully remote" : ""}).${whoLine ? `\nWho can apply: ${whoLine}` : ""}\n\nThe catch: ${catchOf(job)}.\n\nReply with your field and I'll point you to the closest open role.`,
       comment: comment(`${job.title}: what it is, who it's for, and what to prep:`),
     },
     {
       angle: "Fit checklist",
       tag: "Remote Jobs",
-      text: `3 signs you'd be a fit for ${job.title} (${pay}):\n\n1. ${fit[0] || ""}\n2. ${fit[1] || ""}\n3. ${fit[2] || ""}\n\nAll 3? Worth applying.\n2 of 3? Read the prep notes first.\n\nWhich one are you missing?`,
+      text: `${whoLine ? whoLine + "\n\n" : ""}3 signs you'd be a fit for ${job.title} (${pay}):\n\n1. ${fit[0] || ""}\n2. ${fit[1] || ""}\n3. ${fit[2] || ""}\n\nAll 3? Worth applying.\n2 of 3? Read the prep notes first.\n\nWhich one are you missing?`,
       comment: comment("Prep notes and how to apply:"),
     },
   ];

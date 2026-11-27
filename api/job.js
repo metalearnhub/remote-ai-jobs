@@ -4,6 +4,13 @@ const SITE = process.env.SITE_URL || 'https://jobs.dijaedadula.com';
 const share = require('./_share.js');
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+// "Who can apply" badge: country-only (amber), open worldwide (green), remote with no country stated (blue).
+const whereOf = (j) => j && j.eligibility && j.eligibility.label ? j.eligibility : null;
+const whereCls = (e) => (e.kind === 'countries' ? 'wc' : e.kind === 'worldwide' ? 'ww' : 'wr');
+function whereBadge(e, big) {
+  if (!e) return '';
+  return `<div class="where ${whereCls(e)}${big ? ' big' : ''}"><b>${esc(e.label)}</b>${big && e.note ? `<span>${esc(e.note)}</span>` : ''}</div>`;
+}
 const li = (a) => (a || []).map((x) => `<li>${esc(x)}</li>`).join('');
 
 function shell({ title, desc, url, body, robots = 'index,follow', jsonld = '', image = `${SITE}/assets/og.png`, alt = 'Remote AI Work: remote AI roles, pay as posted' }) {
@@ -14,7 +21,7 @@ function shell({ title, desc, url, body, robots = 'index,follow', jsonld = '', i
 <meta property="og:image" content="${esc(image)}"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:alt" content="${esc(alt)}">
 <meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="${esc(title)}"><meta name="twitter:description" content="${esc(desc)}"><meta name="twitter:image" content="${esc(image)}"><meta name="twitter:image:alt" content="${esc(alt)}">
 <meta name="theme-color" content="#4B2EE8"><link rel="icon" href="/assets/icon.svg" type="image/svg+xml"><link rel="icon" href="/assets/favicon-32.png" sizes="32x32" type="image/png"><link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
-<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="/assets/site.css?v=202611220800">${jsonld}</head>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="/assets/site.css?v=202611272200">${jsonld}</head>
 <body>${body}</body></html>`;
 }
 
@@ -32,7 +39,8 @@ function render(j) {
   const closed = j.status !== 'live';
   const company = j.company || 'micro1';
   const cut = (t, n) => { t = String(t || '').replace(/\s+/g, ' ').trim(); if (t.length <= n) return t; const c = t.slice(0, n); return c.slice(0, c.lastIndexOf(' ')).replace(/[,;:.\s]+$/, '') + '…'; };
-  const desc = cut(`${j.pay_text ? `${j.pay_text} (as posted) · ` : ''}${j.job_type || 'Remote'}. ${j.about || ''}`, 158);
+  const W = whereOf(j);
+  const desc = cut(`${W ? W.short + ' · ' : ''}${j.pay_text ? `${j.pay_text} (as posted) · ` : ''}${j.job_type || 'Remote'}. ${j.about || ''}`, 158);
   const faqs = [
     [`Is this page ${company}?`, `No. It's an independent page by Dijae Dadula. ${company} hires and pays. When you continue, you apply on ${company}'s own site through my referral link, and I may earn a referral bonus if you're hired. It costs you nothing.`],
     ['Do I have to pay anything to apply?', `No. Applying is free. Never pay anyone to "unlock" a remote AI role.`],
@@ -47,12 +55,14 @@ function render(j) {
     <p class="crumbs"><a href="/">Open roles</a> / <a href="/?d=${encodeURIComponent(j.domain)}">${esc(j.domain)}</a></p>
     <div class="chips"><a class="chip dom" href="/?d=${encodeURIComponent(j.domain)}">${esc(j.domain)}</a><span class="chip">${esc(j.job_type || 'Remote')}</span>${j.openings ? `<span class="chip">${esc(j.openings)}</span>` : ''}${closed ? '<span class="chip closed">Closed</span>' : ''}</div>
     <h1>${esc(j.title)}</h1>
+    ${whereBadge(W, true)}
     ${j.about ? `<p class="lead-p">${esc(j.about)}</p>` : ''}
     <div class="facts">
       <div><span>Pay (as posted)</span><b class="payb">${esc(j.pay_text || 'See posting')}</b></div>
       <div><span>Type</span><b>${esc(j.job_type || 'Remote')}</b></div>
       <div><span>Hiring platform</span><b>${esc(company)}</b></div>
       <div><span>Openings</span><b>${esc(j.openings || '—')}</b></div>
+      ${W ? `<div class="wide"><span>Who can apply</span><b>${esc(W.label)}</b></div>` : ''}
     </div>
     ${(j.scope || []).length ? `<section class="sec"><h2>What you'll do</h2><ul>${li(j.scope)}</ul></section>` : ''}
     ${((j.tags && j.tags.length ? j.tags : (j.skills || []).slice(0, 4))).length ? `<section class="sec"><h2>Major skills</h2><div class="skills">${(j.tags && j.tags.length ? j.tags : (j.skills || []).slice(0, 4)).map((s) => `<a href="/?s=${encodeURIComponent(s)}">${esc(s)}</a>`).join('')}</div></section>` : ''}
@@ -61,14 +71,14 @@ function render(j) {
     ${j.take ? `<section class="sec"><div class="take"><p>${esc(j.take)}</p><small>Dijae's take</small></div></section>` : ''}
     ${(j.prep || []).length ? `<section class="sec prep"><h2>Before you apply</h2><ol>${li(j.prep)}</ol></section>` : ''}
     ${closed ? '' : share.block({ url, heading: 'Share this role', msgs: {
-      feed: `Hiring now, fully remote: ${j.title}${j.pay_text ? `, ${j.pay_text} (as posted)` : ''}. Free to apply. Know someone who fits? 👇`,
-      dm: `Hey, saw this and thought of you: ${j.title}, remote${j.pay_text ? `, ${j.pay_text} as posted` : ''}. Worth a look?` } })}
+      feed: `Hiring now, fully remote: ${j.title}${j.pay_text ? `, ${j.pay_text} (as posted)` : ''}.${W ? ` ${W.label}.` : ''} Free to apply. Know someone who fits? 👇`,
+      dm: `Hey, saw this and thought of you: ${j.title}, remote${j.pay_text ? `, ${j.pay_text} as posted` : ''}${W ? ` (${W.short})` : ''}. Worth a look?` } })}
     <section class="sec"><h2>Questions</h2>${faqs.map(([q, a]) => `<details class="faq"><summary>${esc(q)}</summary><p>${esc(a)}</p></details>`).join('')}</section>
     <p class="disclose">Independent page by Dijae Dadula — not ${esc(company)}. The role description is summarised from ${esc(company)}'s public posting. I'm a ${esc(company)} referral partner: the application link is my referral link, and I may earn a bonus if you're hired. That never changes what you're paid or how you're assessed.</p>
   </article>
   <aside>
     <div class="pass" id="pass">
-      <div class="pass-top"><small>${closed ? 'This role is closed' : 'Pay as posted'}</small><div class="rate ${String(j.pay_text || '').length > 16 ? 'sm' : ''}">${esc(j.pay_text || 'See posting')}</div><div class="role">${esc(j.title)}</div></div>
+      <div class="pass-top"><small>${closed ? 'This role is closed' : 'Pay as posted'}</small>${W ? `<span class="pwhere ${whereCls(W)}">${esc(W.short)}</span>` : ''}<div class="rate ${String(j.pay_text || '').length > 16 ? 'sm' : ''}">${esc(j.pay_text || 'See posting')}</div><div class="role">${esc(j.title)}</div></div>
       <div class="perf"></div>
       <div class="pass-body" id="passBody">
         ${closed ? `<h3>This role has closed</h3><p class="muted small">Get the next one like it in your inbox.</p>` : `<h3>Apply on ${esc(company)}</h3><p class="muted small">Enter your email to get the application link. You'll go straight to ${esc(company)}'s official page.</p>`}
@@ -89,7 +99,7 @@ ${FOOT}
 <script>window.RJ_FN=${JSON.stringify(FN)};</script><script src="/assets/share.js?v=202611211330" defer></script><script src="/assets/job.js?v=202611211330" defer></script>`;
   const crumbs = `<script type="application/ld+json">${JSON.stringify({ '@context': 'https://schema.org', '@type': 'BreadcrumbList', itemListElement: [{ '@type': 'ListItem', position: 1, name: 'Open roles', item: SITE + '/' }, { '@type': 'ListItem', position: 2, name: j.domain || 'Role', item: `${SITE}/?d=${encodeURIComponent(j.domain || '')}` }, { '@type': 'ListItem', position: 3, name: j.title, item: url }] }).replace(/</g, '\\u003c')}</script>`;
   const v = encodeURIComponent(String(j.updated_at || '').replace(/\D/g, '').slice(0, 12));
-  return shell({ title: `${j.title}${j.pay_text ? ` (${j.pay_text})` : ''} · Remote AI Work`, desc, url, body, jsonld: jsonld + crumbs, image: `${SITE}/og/${j.slug}.png${v ? '?v=' + v : ''}`, alt: `${j.title}${j.pay_text ? ', ' + j.pay_text + ' as posted' : ''}` });
+  return shell({ title: `${j.title}${j.pay_text ? ` (${j.pay_text})` : ''} · Remote AI Work`, desc, url, body, jsonld: jsonld + crumbs, image: `${SITE}/og/${j.slug}.png${v ? '?v=' + v : ''}`, alt: `${j.title}${j.pay_text ? ', ' + j.pay_text + ' as posted' : ''}${W ? ', ' + W.short : ''}` });
 }
 
 module.exports = async (req, res) => {
@@ -109,6 +119,8 @@ module.exports = async (req, res) => {
   }
 };
 module.exports.render = render;
+module.exports.whereBadge = whereBadge;
+module.exports.whereOf = whereOf;
 module.exports.notFound = notFound;
 module.exports.shell = shell;
 module.exports.BAR = BAR;

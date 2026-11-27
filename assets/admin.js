@@ -65,7 +65,9 @@
     return `For people with ${low} experience: AI labs are paying people with your background to train and test their models, fully remote.\n\nI keep one page with every open ${low} role, explained in plain words with pay as posted. ${n === 1 ? '1 role is' : n + ' roles are'} open now:\n${list}${n > 4 ? '\n…and ' + (n - 4) + ' more' : ''}\n\nSee them all here: ${catUrl(c.name, ch)}\n\nNew roles get added to the same link, so it's worth saving. (Independent page, not the hiring platform. I'm a referral partner and may earn a bonus if you're hired. Applying is free.)`;
   }
 
-  let JF = { q: '', st: '' };
+  const whereCls = (e) => (!e ? 'wr' : e.kind === 'countries' ? 'wc' : e.kind === 'worldwide' ? 'ww' : 'wr');
+  const whereTag = (j) => (j.eligibility && j.eligibility.label ? `<span class="wtag ${whereCls(j.eligibility)}" title="${esc(j.eligibility.note || '')}">${esc(j.eligibility.label)}</span>` : '');
+  let JF = { q: '', st: '', w: '' };
   async function viewJobs() {
     if (!JOBS.length) app.innerHTML = '<div class="adm"><p class="muted">Loading…</p></div>';
     await refresh();
@@ -75,20 +77,22 @@
     app.innerHTML = `<div class="adm"><div class="row between"><h1>Jobs</h1><a class="btn primary sm hm" href="#new">+ Add job</a></div>
       <div class="stats mini"><div><b>${live.length}</b><span>live</span></div><div><b>${v}</b><span>views</span></div><div><b>${a}</b><span>applies</span></div><div><b>${v ? Math.round(a / v * 100) : 0}%</b><span>view→apply</span></div></div>
       <div class="jtools"><input type="search" id="jq" placeholder="Search roles" value="${esc(JF.q)}" aria-label="Search roles">
+      <div class="jchips" role="group" aria-label="Filter by who can apply" data-g="w">${[['', 'Anywhere'], ['open', '🌍 Open to all'], ['countries', '📍 Country-only']].map(([k, l]) => `<button type="button" data-w="${k}" class="${JF.w === k ? 'on' : ''}">${l} <i>${JOBS.filter((j) => !k || (k === 'countries' ? (j.eligibility || {}).kind === 'countries' : (j.eligibility || {}).kind !== 'countries')).length}</i></button>`).join('')}</div>
       <div class="jchips" role="group" aria-label="Filter by status">${[['', 'All'], ['live', 'Live'], ['draft', 'Draft'], ['closed', 'Closed']].map(([k, l]) => `<button type="button" data-st="${k}" class="${JF.st === k ? 'on' : ''}">${l} <i>${cnt(k)}</i></button>`).join('')}</div></div>
       <div id="jlist"></div>
       <details class="hint fold"><summary>Daily routine (≈1 min)</summary>In your referral dashboard, click "Refer and earn" on 1–3 roles, copy the links, and paste them into <a href="#new">Add links</a>. Everything else is written for you. (The dashboard itself stays manual: its terms don't allow automated tools.)</details></div>`;
     const draw = () => {
       const q = JF.q.toLowerCase();
-      const xs = JOBS.filter((j) => (!JF.st || j.status === JF.st) && (!q || (j.title + ' ' + j.domain + ' ' + (j.pay_text || '')).toLowerCase().includes(q)));
+      const xs = JOBS.filter((j) => (!JF.st || j.status === JF.st) && (!JF.w || (JF.w === 'countries') === ((j.eligibility || {}).kind === 'countries')) && (!q || (j.title + ' ' + j.domain + ' ' + (j.pay_text || '') + ' ' + ((j.eligibility || {}).label || '')).toLowerCase().includes(q)));
       $('#jlist').innerHTML = !JOBS.length ? '<p class="muted">No jobs yet. <a href="#new">Add your first one</a>.</p>' : !xs.length ? '<p class="muted" style="padding:14px 2px">No roles match.</p>' :
-        `<div class="jl">${xs.map((j) => `<article class="jrow"><div class="jmain"><b>${esc(j.title)}</b><span class="jmeta"><span class="pill ${j.status}">${j.status}</span>${esc(j.pay_text || '')}<span class="dot">·</span>${esc(j.domain)}<span class="dot">·</span>${j.views} views · ${j.applies} applies</span></div>
+        `<div class="jl">${xs.map((j) => `<article class="jrow"><div class="jmain"><b>${esc(j.title)}</b>${whereTag(j)}<span class="jmeta"><span class="pill ${j.status}">${j.status}</span>${esc(j.pay_text || '')}<span class="dot">·</span>${esc(j.domain)}<span class="dot">·</span>${j.views} views · ${j.applies} applies</span></div>
           <div class="jact"><button class="btn primary sm" data-posts="${j.id}">Posts</button><button class="btn ghost sm" data-copy="${esc(pageUrl(j))}">Copy link</button>${j.status !== 'draft' ? `<a class="btn ghost sm" target="_blank" rel="noopener" href="${esc(pageUrl(j))}">Open</a>` : ''}<a class="btn ghost sm" href="#edit-${j.id}">Edit</a></div></article>`).join('')}</div>`;
       $$('#jlist [data-copy]').forEach((b) => b.onclick = async () => { await copy(b.dataset.copy); flash(b); });
       $$('#jlist [data-posts]').forEach((b) => b.onclick = () => openPosts(+b.dataset.posts));
     };
     $('#jq').oninput = (e) => { JF.q = e.target.value; draw(); };
-    $$('.jchips button').forEach((b) => b.onclick = () => { JF.st = b.dataset.st; $$('.jchips button').forEach((x) => x.classList.toggle('on', x === b)); draw(); });
+    $$('.jchips button[data-st]').forEach((b) => b.onclick = () => { JF.st = b.dataset.st; $$('.jchips button[data-st]').forEach((x) => x.classList.toggle('on', x === b)); draw(); });
+    $$('.jchips button[data-w]').forEach((b) => b.onclick = () => { JF.w = b.dataset.w; $$('.jchips button[data-w]').forEach((x) => x.classList.toggle('on', x === b)); draw(); });
     draw();
   }
 
@@ -106,7 +110,7 @@
     const both = (p) => (p.comment ? `${p.text}\n\n— Reply with —\n${p.comment}` : p.text);
     const m = document.createElement('div');
     m.className = 'modal'; m.setAttribute('role', 'dialog'); m.setAttribute('aria-modal', 'true'); m.setAttribute('aria-labelledby', 'mh');
-    m.innerHTML = `<div class="sheet"><div class="mhead"><div><b id="mh">${esc(j.title)}</b><span class="muted small">${esc(j.pay_text || '')} · ${esc(j.domain || '')}</span></div><button class="x" aria-label="Close">✕</button></div>
+    m.innerHTML = `<div class="sheet"><div class="mhead"><div><b id="mh">${esc(j.title)}</b><span class="muted small">${esc(j.pay_text || '')} · ${esc(j.domain || '')}</span>${whereTag(j)}</div><button class="x" aria-label="Close">✕</button></div>
       <div class="mbar"><button class="btn primary sm" data-all>Copy all 3 posts</button><button class="btn ghost sm" data-sel>Copy ticked</button><button class="btn ghost sm" data-link>Copy page link</button>${j.domain ? `<button class="btn ghost sm" data-cat>Copy ${esc(j.domain)} list link</button>` : ''}</div>
       <div class="mbody">${j.threads.map((p, i) => `<div class="mpost">
         <div class="row between"><label class="check"><input type="checkbox" data-pick="${i}" checked> <b>${esc(p.angle || 'Post ' + (i + 1))}</b></label><span class="pill">Topic: ${esc(p.tag || 'Remote Jobs')}</span></div>
@@ -190,7 +194,13 @@
       <div class="panel" id="fields"></div></div>`;
     function fields() {
       const doms = Object.keys(D);
-      $('#fields').innerHTML = `<h2>Page content</h2>
+      const E = j.eligibility || null;
+      $('#fields').innerHTML = `<h2>Who can apply</h2>
+        <p class="muted small" style="margin:-6px 0 10px">${E ? `Now showing: ${whereTag(j)}${E.manual ? ' (set by you)' : ' (auto-detected from the posting)'}` : 'Not detected yet.'}</p>
+        <div class="grid3"><label class="f">Show as<select id="w_kind"><option value="">Auto-detect from the posting</option><option value="worldwide"${E && E.manual && E.kind === 'worldwide' ? ' selected' : ''}>🌍 Open worldwide</option><option value="remote"${E && E.manual && E.kind === 'remote' ? ' selected' : ''}>🌍 Remote, no country limit stated</option><option value="countries"${E && E.manual && E.kind === 'countries' ? ' selected' : ''}>📍 Specific countries only</option></select></label>
+        <label class="f">Countries <small>comma-separated, for country-only</small><input type="text" id="w_c" value="${esc(E && E.kind === 'countries' ? (E.countries || []).join(', ') : '')}" placeholder="United States, Canada"></label>
+        <label class="f">Note <small>optional, e.g. needs a U.S. license</small><input type="text" id="w_n" value="${esc((E && E.note) || '')}"></label></div>
+        <h2 style="margin-top:22px">Page content</h2>
         <div class="grid2"><label class="f">Role title<input type="text" id="f_title" value="${esc(j.title || '')}"></label>
         <label class="f">Page address <small>${esc(SITE)}/j/…</small><input type="text" id="f_slug" value="${esc(j.slug || '')}"></label></div>
         <div class="grid3" style="margin-top:12px"><label class="f">Domain<select id="f_domain">${doms.map((d) => `<option ${d === j.domain ? 'selected' : ''}>${esc(d)}</option>`).join('')}</select></label>
@@ -214,11 +224,26 @@
         domain: $('#f_domain').value, pay_text: $('#f_pay').value.trim(), openings: $('#f_open').value.trim(), job_type: $('#f_type').value.trim(), company: $('#f_co').value.trim() || 'micro1',
         about: $('#f_about').value.trim(), scope: lines($('#f_scope').value), preferred: lines($('#f_pref').value), skills: $('#f_skills').value.split(',').map((x) => x.trim()).filter(Boolean),
         fit: lines($('#f_fit').value), prep: lines($('#f_prep').value), take: $('#f_take').value.trim(), threads: j.threads || [],
+        ...whereFromForm(),
       });
+      // Your choice overrides the auto-detected value; "Auto-detect" clears it so the next refresh re-reads the posting.
+      function whereFromForm() {
+        const k = $('#w_kind').value, note = $('#w_n').value.trim() || null;
+        if (!k) return {};
+        const FL = { 'United States': '🇺🇸', Canada: '🇨🇦', Mexico: '🇲🇽', Brazil: '🇧🇷', 'United Kingdom': '🇬🇧', Philippines: '🇵🇭', India: '🇮🇳', Australia: '🇦🇺', Belgium: '🇧🇪', Switzerland: '🇨🇭', France: '🇫🇷', Germany: '🇩🇪', Spain: '🇪🇸' };
+        if (k === 'worldwide') return { eligibility: { kind: k, countries: [], label: '🌍 Open worldwide', short: 'Open worldwide', note, manual: true } };
+        if (k === 'remote') return { eligibility: { kind: k, countries: [], label: '🌍 Remote · no country limit stated', short: 'No country limit stated', note, manual: true } };
+        const cs = $('#w_c').value.split(',').map((x) => x.trim()).filter(Boolean).map((x) => (/^(us|usa|u\.s\.?)$/i.test(x) ? 'United States' : /^uk$/i.test(x) ? 'United Kingdom' : x));
+        const nm = cs.length <= 3 ? cs.map((x) => x.replace('United States', 'US').replace('United Kingdom', 'UK')).join(' & ') : `${cs.length} countries`;
+        return { eligibility: { kind: k, countries: cs, label: `${cs.slice(0, 3).map((x) => FL[x] || '📍').join('')} ${nm} only`, short: `${nm} only`, note: note || (cs.length > 3 ? cs.join(', ') : null), manual: true } };
+      }
       const save = async (status) => {
         const e = $('#ferr'); e.hidden = true;
         const o = collect(status);
-        try { const d = await api({ action: 'save', job: o }); j = d.job; toast(status === 'live' ? 'Published' : status === 'closed' ? 'Marked closed' : 'Draft saved'); location.hash = status === 'live' ? 'threads' : 'jobs'; }
+        try { let d = await api({ action: 'save', job: o });
+          if (!$('#w_kind').value && j.id && j.eligibility && j.eligibility.manual) d = await api({ action: 'where_auto', id: j.id });
+          else if (o.eligibility && j.id) { const r = await api({ action: 'rethread', id: j.id }); if (r.job) d = r; }
+          j = d.job; toast(status === 'live' ? 'Published' : status === 'closed' ? 'Marked closed' : 'Draft saved'); location.hash = status === 'live' ? 'threads' : 'jobs'; }
         catch (x) { e.textContent = x.message; e.hidden = false; }
       };
       $('#pub').onclick = () => save('live');

@@ -136,3 +136,8 @@ tr.dup td { background: color-mix(in srgb, var(--warn) 8%, transparent); }
   body[data-ttl='Add links'] .qadd, body[data-ttl='Edit job'] .qadd, body[data-ttl='New job'] .qadd { display: none !important; }
   .toast { bottom: calc(18px + env(safe-area-inset-bottom)); }
 }
+
+.wtag { display: inline-block; align-self: flex-start; font-size: .8rem; font-weight: 800; padding: 2px 9px; border-radius: 99px; margin: 3px 0 1px; }
+.wtag.wc { background: #FFF1D6; color: #7A4300; } .wtag.ww { background: var(--pay-soft); color: var(--pay); } .wtag.wr { background: var(--accent-soft); color: var(--accent); }
+@media (prefers-color-scheme: dark) { .wtag.wc { background: #3A2A0E; color: #F5C46B; } }
+.mhead .wtag { margin-top: 6px; }

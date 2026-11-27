@@ -5,6 +5,7 @@ import { createClient } from "npm:@supabase/supabase-js@2.45.4";
 import nodemailer from "npm:nodemailer@6.9.16";
 import { POST_RE, extract, build, threads, slugify } from "./gen.js";
 import { classify } from "./tax.js";
+import { eligibility } from "./where.js";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -15,7 +16,7 @@ const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SE
 const EMAIL = /^[^\s@<>"']{1,64}@[^\s@<>"']{1,190}\.[A-Za-z]{2,24}$/;
 const SLUG = /^[a-z0-9-]{2,90}$/;
 const NL = "https://qbubwemdvwflxvxwesrl.supabase.co/functions/v1/nl";
-const PUBLIC_COLS = "slug,title,domain,company,pay_text,job_type,openings,skills,tags,about,scope,preferred,fit,take,prep,status,published_at,updated_at";
+const PUBLIC_COLS = "slug,title,domain,company,pay_text,job_type,openings,skills,tags,about,scope,preferred,fit,take,prep,status,published_at,updated_at,eligibility";
 const CONSENT = "Send me instant alerts for remote AI roles and the free guide (job-alerts). Unsubscribe anytime.";
 
 function j(body: unknown, status = 200, cache = "no-store") {
@@ -253,6 +254,7 @@ async function ingest(list: unknown, refresh: boolean, force = false, rebuild = 
         const upd: any = { source_id: id, source_hash: hash, updated_at: new Date().toISOString() };
         for (const k of keep) upd[k] = (g as any)[k];
         if (g.status === "closed") upd.status = "closed";
+        if (!(ex.eligibility && ex.eligibility.manual)) upd.eligibility = eligibility(g.title, g.raw);
         await ensureDomain(g.domain);
         upd.tags = await tagJob(x.skills, g.domain, g.scope.join(" ") + " " + g.title);
         upd.threads = threads({ ...ex, ...upd }, ex.slug, base).map((p: any, i: number) => ({ ...p, posted: (ex.threads || [])[i]?.posted || null }));
@@ -285,6 +287,7 @@ async function ingest(list: unknown, refresh: boolean, force = false, rebuild = 
         // Details changed (or refresh asked): update the facts, keep the curated text, rewrite posts.
         const upd: any = { pay_text: g.pay_text || ex.pay_text, openings: g.openings, status: g.status === "closed" ? "closed" : ex.status, source_id: id, source_hash: hash, updated_at: new Date().toISOString() };
         if (ex.source_hash && g.title && g.title !== ex.title) upd.title = g.title;
+        if (!(ex.eligibility && ex.eligibility.manual)) { upd.eligibility = eligibility(g.title, g.raw); if (ex.eligibility && ex.eligibility.label !== upd.eligibility.label) changes.push(`who can apply: ${ex.eligibility.short} → ${upd.eligibility.short}`); }
         await ensureDomain(ex.domain);
         upd.tags = await tagJob(x.skills.length ? x.skills : ex.skills || [], ex.domain, (ex.scope || []).join(" ") + " " + ex.title);
         upd.threads = threads({ ...ex, ...upd }, ex.slug, base).map((p: any, i: number) => ({ ...p, posted: (ex.threads || [])[i]?.posted || null }));
@@ -308,10 +311,11 @@ async function ingest(list: unknown, refresh: boolean, force = false, rebuild = 
       const now = new Date().toISOString();
       await ensureDomain(g.domain);
       const tags = await tagJob(x.skills, g.domain, g.scope.join(" ") + " " + g.title);
-      const row = { ...g, slug, tags, source_id: id, source_hash: hash, threads: threads(g, slug, base), published_at: g.status === "live" ? now : null, updated_at: now };
+      const elig = eligibility(g.title, g.raw);
+      const row = { ...g, slug, tags, eligibility: elig, source_id: id, source_hash: hash, threads: threads({ ...g, eligibility: elig }, slug, base), published_at: g.status === "live" ? now : null, updated_at: now };
       const { error } = await db.from("rj_jobs").insert(row);
       if (error) throw new Error(error.message);
-      out.push({ url: u, ok: true, created: true, slug, title: g.title, pay_text: g.pay_text, domain: g.domain, tags, status: g.status, similar: twin ? twin.slug : null });
+      out.push({ url: u, ok: true, created: true, slug, title: g.title, pay_text: g.pay_text, domain: g.domain, tags, where: elig.short, status: g.status, similar: twin ? twin.slug : null });
     } catch (e) {
       out.push({ url: u, ok: false, error: String((e as Error).message || e).slice(0, 200) });
     }
@@ -332,6 +336,20 @@ async function hashAll() {
       await db.from("rj_jobs").update({ source_id: m[1].toLowerCase(), source_hash: await fingerprint(g) }).eq("id", jb.id);
       out.push({ id: jb.id, ok: true });
     } catch (e) { out.push({ id: jb.id, ok: false, error: String(e).slice(0, 120) }); }
+  }
+  return { ok: true, jobs: out };
+}
+
+// Re-reads "who can apply" for every saved job from its stored posting text (keeps manual overrides) and rewrites posts.
+async function whereAll() {
+  const base = await site();
+  const { data: jobs } = await db.from("rj_jobs").select("*");
+  const out: any[] = [];
+  for (const jb of jobs || []) {
+    const e = jb.eligibility && jb.eligibility.manual ? jb.eligibility : eligibility(jb.title, jb.raw);
+    const t = threads({ ...jb, eligibility: e }, jb.slug, base).map((p: any, i: number) => ({ ...p, posted: (jb.threads || [])[i]?.posted || null }));
+    await db.from("rj_jobs").update({ eligibility: e, threads: t }).eq("id", jb.id);
+    out.push({ id: jb.id, title: jb.title, where: e.label });
   }
   return { ok: true, jobs: out };
 }
@@ -371,7 +389,7 @@ async function verify(email: string, code: string) {
   return j({ token, expires_at: expires, email });
 }
 
-const JOB_FIELDS = ["slug", "title", "domain", "company", "pay_text", "job_type", "openings", "skills", "about", "scope", "preferred", "fit", "take", "prep", "referral_url", "status", "threads", "raw"];
+const JOB_FIELDS = ["slug", "title", "domain", "company", "pay_text", "job_type", "openings", "skills", "about", "scope", "preferred", "fit", "take", "prep", "referral_url", "status", "threads", "raw", "eligibility"];
 function cleanJob(x: any) {
   const o: any = {};
   for (const k of JOB_FIELDS) if (k in x) o[k] = x[k];
@@ -381,6 +399,11 @@ function cleanJob(x: any) {
   if ("referral_url" in o) { const u = String(o.referral_url || "").trim(); o.referral_url = /^https:\/\/[^\s]+$/.test(u) ? u : null; }
   if ("slug" in o) o.slug = String(o.slug || "").toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 90);
   if ("threads" in o && !Array.isArray(o.threads)) o.threads = [];
+  if ("eligibility" in o) {
+    const e = o.eligibility;
+    if (!e || typeof e !== "object" || !["countries", "worldwide", "remote"].includes(e.kind)) delete o.eligibility;
+    else o.eligibility = { kind: e.kind, countries: (Array.isArray(e.countries) ? e.countries : []).map((c: unknown) => String(c).trim().slice(0, 40)).filter(Boolean).slice(0, 40), label: String(e.label || "").slice(0, 80), short: String(e.short || "").slice(0, 60), note: e.note ? String(e.note).slice(0, 200) : null, manual: !!e.manual };
+  }
   return o;
 }
 
@@ -453,10 +476,18 @@ async function admin(b: any, email: string) {
     const { error } = await db.from("rj_jobs").update({ tags }).eq("id", Number(b.id) || 0);
     return error ? j({ error: error.message }, 500) : j({ ok: true, tags });
   }
+  if (a === "where_auto") {
+    const { data: jb } = await db.from("rj_jobs").select("*").eq("id", Number(b.id) || 0).maybeSingle();
+    if (!jb) return j({ error: "Job not found." }, 404);
+    const e = eligibility(jb.title, jb.raw);
+    const t = threads({ ...jb, eligibility: e }, jb.slug, await site()).map((p: any, i: number) => ({ ...p, posted: (jb.threads || [])[i]?.posted || null }));
+    const { data, error } = await db.from("rj_jobs").update({ eligibility: e, threads: t, updated_at: new Date().toISOString() }).eq("id", jb.id).select("*").single();
+    return error ? j({ error: error.message }, 500) : j({ job: data });
+  }
   if (a === "rethread") {
     const { data: jb } = await db.from("rj_jobs").select("*").eq("id", Number(b.id) || 0).maybeSingle();
     if (!jb) return j({ error: "Job not found." }, 404);
-    const t = threads(jb, jb.slug, await site());
+    const t = threads(jb, jb.slug, await site()).map((p: any, i: number) => ({ ...p, posted: (jb.threads || [])[i]?.posted || null }));
     const { data, error } = await db.from("rj_jobs").update({ threads: t, updated_at: new Date().toISOString() }).eq("id", jb.id).select("*").single();
     if (error) return j({ error: error.message }, 500);
     return j({ job: data });
@@ -547,6 +578,7 @@ Deno.serve(async (req) => {
       if (k.length < 32 || String(b.key || "") !== k) return j({ error: "unauthorized" }, 401);
       if (b.retag_all) return j(await retagAll());
       if (b.hash_all) return j(await hashAll());
+      if (b.where_all) return j(await whereAll());
       return j(await ingest(b.urls, !!b.refresh, !!b.force, !!b.rebuild));
     }
     const email = String(b.email || "").trim().toLowerCase();

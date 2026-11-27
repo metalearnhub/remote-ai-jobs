@@ -4,6 +4,12 @@
   const list = document.getElementById('list');
   const qs = new URLSearchParams(location.search);
   const CAT = window.RJ_CAT || null;
+  // Where filter: '' (all), 'open' (worldwide or no country limit), or a country/region name.
+  let W = new URLSearchParams(location.search).get('w') || '';
+  const whereOf = (j) => (j.eligibility && j.eligibility.label ? j.eligibility : null);
+  const whereCls = (e) => (e.kind === 'countries' ? 'wc' : e.kind === 'worldwide' ? 'ww' : 'wr');
+  const whereKeys = (j) => { const e = whereOf(j); if (!e) return ['open']; if (e.kind !== 'countries') return ['open']; return [e.short.replace(/ only$/, '')]; };
+  const whereOk = (j) => !W || whereKeys(j).includes(W);
   let D = CAT ? (CAT.k === 'd' ? CAT.v : '') : qs.get('d') || '', S = CAT ? (CAT.k === 's' ? CAT.v : '') : qs.get('s') || '', JOBS = [], TAX = { domains: [], skills: [] };
   const slugify = (s) => String(s || '').toLowerCase().replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80);
   const shareBtn = document.getElementById('share');
@@ -22,13 +28,19 @@
   const tagsOf = (j) => (j.tags && j.tags.length ? j.tags : (j.skills || []).slice(0, 3));
   function sync() {
     if (CAT) return;
-    const u = new URL(location.href); D ? u.searchParams.set('d', D) : u.searchParams.delete('d'); S ? u.searchParams.set('s', S) : u.searchParams.delete('s');
+    const u = new URL(location.href); D ? u.searchParams.set('d', D) : u.searchParams.delete('d'); S ? u.searchParams.set('s', S) : u.searchParams.delete('s'); W ? u.searchParams.set('w', W) : u.searchParams.delete('w');
     history.replaceState(null, '', u.pathname + (u.search || '') + u.hash);
   }
   function chip(label, n, on, kind) { return `<button type="button" class="fchip${on ? ' on' : ''}" data-k="${kind}" data-v="${esc(label)}" aria-pressed="${on}">${esc(label)}${n != null ? ` <i>${n}</i>` : ''}</button>`; }
   function draw() {
     const inD = JOBS.filter((j) => !D || j.domain === D);
-    const shown = inD.filter((j) => !S || tagsOf(j).includes(S));
+    const shown = inD.filter((j) => (!S || tagsOf(j).includes(S)) && whereOk(j));
+    const fw = document.getElementById('fwhere');
+    if (fw) {
+      const wc = {}; inD.forEach((j) => whereKeys(j).forEach((k) => (wc[k] = (wc[k] || 0) + 1)));
+      const keys = Object.keys(wc).filter((k) => k !== 'open').sort((a, b) => wc[b] - wc[a]);
+      fw.innerHTML = Object.keys(wc).length > 1 || W ? `<span class="muted small">Where:</span>` + chip('Anywhere', null, !W, 'w') + (wc.open ? `<button type="button" class="fchip${W === 'open' ? ' on' : ''}" data-k="w" data-v="open" aria-pressed="${W === 'open'}">🌍 Open to all <i>${wc.open}</i></button>` : '') + keys.map((k) => chip(k, wc[k], W === k, 'w')).join('') : '';
+    }
     const fd = document.getElementById('fdom'), fs = document.getElementById('fskill'), fl = document.getElementById('filters');
     const doms = TAX.domains.length ? TAX.domains : Array.from(new Set(JOBS.map((j) => j.domain))).map((name) => ({ name, count: JOBS.filter((j) => j.domain === name).length }));
     if (fd) fd.innerHTML = chip('All fields', JOBS.length, !D, 'd') + doms.map((d) => chip(d.name, d.count, D === d.name, 'd')).join('');
@@ -36,10 +48,10 @@
     const skills = Object.entries(sc).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, 12);
     if (fs) fs.innerHTML = skills.length > 1 || S ? `<span class="muted small">Skills:</span>` + skills.map(([n, c]) => chip(n, c, S === n, 's')).join('') + (S && !sc[S] ? chip(S, 0, true, 's') : '') : '';
     if (fl) fl.hidden = JOBS.length < 2;
-    document.getElementById('count').innerHTML = `${shown.length} role${shown.length === 1 ? '' : 's'}${!CAT && (D || S) ? ' · <a href="/" id="clr">clear filters</a>' : ''}`;
+    document.getElementById('count').innerHTML = `${shown.length} role${shown.length === 1 ? '' : 's'}${(!CAT && (D || S)) || W ? ' · <a href="/" id="clr">clear filters</a>' : ''}`;
     setShare();
-    const clr = document.getElementById('clr'); if (clr) clr.onclick = (e) => { e.preventDefault(); D = S = ''; sync(); draw(); };
-    list.innerHTML = shown.length ? shown.map((j) => `<a class="card" href="/j/${esc(j.slug)}"><div><div class="chips" style="margin:0"><span class="chip dom">${esc(j.domain)}</span><span class="chip">${esc(j.job_type || 'Remote')}</span></div>
+    const clr = document.getElementById('clr'); if (clr) clr.onclick = (e) => { e.preventDefault(); if (!CAT) D = S = ''; W = ''; sync(); draw(); };
+    list.innerHTML = shown.length ? shown.map((j) => `<a class="card" href="/j/${esc(j.slug)}"><div>${whereOf(j) ? `<div class="where ${whereCls(whereOf(j))}"><b>${esc(whereOf(j).label)}</b></div>` : ''}<div class="chips" style="margin:0"><span class="chip dom">${esc(j.domain)}</span><span class="chip">${esc(j.job_type || 'Remote')}</span></div>
       <h3>${esc(j.title)}</h3><span class="muted small">${esc(cut(j.about, 160))}</span>
       ${tagsOf(j).length ? `<div class="tags">${tagsOf(j).slice(0, 4).map((t) => `<span>${esc(t)}</span>`).join('')}</div>` : ''}</div>
       <div class="pay">${esc(j.pay_text || '')}<small>as posted · ${esc(j.company || '')}</small></div></a>`).join('')
@@ -47,6 +59,7 @@
   }
   const flEl = document.getElementById('filters'); if (flEl) flEl.addEventListener('click', (e) => {
     const b = e.target.closest('.fchip'); if (!b) return;
+    if (b.dataset.k === 'w') { W = b.dataset.v === 'Anywhere' ? '' : (W === b.dataset.v ? '' : b.dataset.v); sync(); draw(); return; }
     if (b.dataset.k === 'd') { D = b.dataset.v === 'All fields' ? '' : (D === b.dataset.v ? '' : b.dataset.v); S = ''; }
     else S = S === b.dataset.v ? '' : b.dataset.v;
     sync(); draw();

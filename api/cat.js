@@ -1,6 +1,6 @@
 // Category page (/c/:slug): every open role in one field or major skill, so one link can be shared to a community
 // (a music group sees only music roles). Server-rendered for link previews and search; board.js keeps it live.
-const { shell, BAR, FOOT, notFound } = require('./job.js');
+const { shell, BAR, FOOT, notFound, whereBadge, whereOf } = require('./job.js');
 const share = require('./_share.js');
 const FN = 'https://qbubwemdvwflxvxwesrl.supabase.co/functions/v1/rj';
 const SITE = process.env.SITE_URL || 'https://jobs.dijaedadula.com';
@@ -19,7 +19,7 @@ function resolve(slug, jobs) {
   return null;
 }
 
-const cardHtml = (j) => `<a class="card" href="/j/${esc(j.slug)}"><div><div class="chips" style="margin:0"><span class="chip dom">${esc(j.domain)}</span><span class="chip">${esc(j.job_type || 'Remote')}</span></div>
+const cardHtml = (j) => `<a class="card" href="/j/${esc(j.slug)}"><div>${whereBadge(whereOf(j))}<div class="chips" style="margin:0"><span class="chip dom">${esc(j.domain)}</span><span class="chip">${esc(j.job_type || 'Remote')}</span></div>
       <h3>${esc(j.title)}</h3><span class="muted small">${esc(cut(j.about, 160))}</span>
       ${tagsOf(j).length ? `<div class="tags">${tagsOf(j).slice(0, 4).map((t) => `<span>${esc(t)}</span>`).join('')}</div>` : ''}</div>
       <div class="pay">${esc(j.pay_text || '')}<small>as posted · ${esc(j.company || '')}</small></div></a>`;
@@ -50,6 +50,7 @@ function render(slug, c) {
     </form>
   </section>
   <div class="row between" style="align-items:baseline;gap:10px;flex-wrap:wrap"><h2 style="margin:0">${esc(label)}</h2><span class="row" style="gap:10px;align-items:center"><span class="muted small" id="count">${n} role${n === 1 ? '' : 's'}</span><button class="btn ghost sm" type="button" id="share" data-url="${esc(url)}" data-title="Remote AI roles in ${esc(c.name)}">Share this list</button></span></div>
+  <div class="filters" id="filters" hidden><div class="frow" id="fwhere" role="group" aria-label="Filter by where you can apply from"></div></div>
   <div class="list" id="list">${c.jobs.map(cardHtml).join('')}</div>
   <p class="muted" style="margin-top:18px">Not your field? <a href="/">See all open roles</a>.</p>
   <div style="margin-top:28px">${share.block({ url, heading: 'Share this list', msgs: {
@@ -62,7 +63,7 @@ function render(slug, c) {
   </div>
 </main>
 ${FOOT}
-<script>window.RJ_FN=${JSON.stringify(FN)};window.RJ_CAT=${JSON.stringify({ k: c.kind, v: c.name, slug }).replace(/</g, '\\u003c')};</script><script src="/assets/share.js?v=202611211330" defer></script><script src="/assets/board.js?v=202611211330" defer></script>`;
+<script>window.RJ_FN=${JSON.stringify(FN)};window.RJ_CAT=${JSON.stringify({ k: c.kind, v: c.name, slug }).replace(/</g, '\\u003c')};</script><script src="/assets/share.js?v=202611211330" defer></script><script src="/assets/board.js?v=202611272200" defer></script>`;
   const ld = { '@context': 'https://schema.org', '@type': 'CollectionPage', name: `Remote AI roles in ${c.name}`, url, mainEntity: { '@type': 'ItemList', itemListElement: c.jobs.map((j, i) => ({ '@type': 'ListItem', position: i + 1, url: `${SITE}/j/${j.slug}`, name: j.title })) } };
   const crumbs = { '@context': 'https://schema.org', '@type': 'BreadcrumbList', itemListElement: [{ '@type': 'ListItem', position: 1, name: 'Open roles', item: SITE + '/' }, { '@type': 'ListItem', position: 2, name: c.name, item: url }] };
   const jsonld = [ld, crumbs].map((o) => `<script type="application/ld+json">${JSON.stringify(o).replace(/</g, '\\u003c')}</script>`).join('');
