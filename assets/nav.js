@@ -28,7 +28,7 @@
       return `<a class="nlink${on ? ' on' : ''}" href="${esc(a.getAttribute('href'))}">${esc(label)}</a>`;
     }).join('');
     dr.innerHTML = `<div class="nhead"><a class="logo" href="/"><img src="/assets/icon.svg" alt="" width="30" height="30"><span>Remote AI Work</span></a><button type="button" class="nclose" aria-label="Close menu">${svg('<path d="M6 6l12 12M18 6 6 18"/>')}</button></div>
-      <nav class="nlist">${links}${isAdmin ? '<a class="nlink" href="/" target="_blank" rel="noopener">Open the job board ↗</a><button type="button" class="nlink out" id="nso">Sign out</button>' : ''}</nav>
+      <nav class="nlist">${links}${isAdmin ? '' : `<a class="nlink${location.pathname === '/alerts' ? ' on' : ''}" href="/alerts">⚙️ My job alerts</a>`}${isAdmin ? '<a class="nlink" href="/" target="_blank" rel="noopener">Open the job board ↗</a><button type="button" class="nlink out" id="nso">Sign out</button>' : ''}</nav>
       ${isAdmin ? '' : '<div class="nsec"><small>Browse by field</small><div class="nfields" id="nfields"><span class="muted small">Loading…</span></div></div>'}`;
     const so = dr.querySelector('#nso'); if (so) so.onclick = () => { try { localStorage.removeItem('rj_admin'); } catch (e) {} close(); location.hash = ''; location.reload(); };
     if (!isAdmin) fetch(FN + '?a=taxonomy').then((r) => r.json()).then((t) => {

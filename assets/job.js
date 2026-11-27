@@ -37,16 +37,18 @@
   post({ action: 'view', slug, ref, by: by() }).catch(() => {});
 
   const body = document.getElementById('passBody');
-  function readyView(url) {
+  const dom = (document.querySelector('.chip.dom') || {}).textContent || '';
+  const prefsBtn = (t) => `<a class="btn ghost block prefs-cta" href="/alerts?d=${encodeURIComponent(dom)}#t=${encodeURIComponent(t)}">⚙️ Customize my job alerts</a>`;
+  function readyView(url, t) {
     body.innerHTML = `<div class="ready"><div class="ok"><i>✓</i> Your link is ready</div>
       <a class="btn primary block" href="${esc(url)}" target="_blank" rel="noopener" id="cont">Continue to ${co} →</a>
-      <p class="note">You'll apply on ${co}'s official page. Tip: pick roles you could talk about for 20 minutes with real examples. <a href="/guide">Read the free prep guide</a>.</p></div>`;
+      <p class="note">You'll apply on ${co}'s official page. Tip: pick roles you could talk about for 20 minutes with real examples. <a href="/guide">Read the free prep guide</a>.</p>${t ? prefsBtn(t) : ''}</div>`;
   }
   function returningView(v) {
     body.innerHTML = `<h3>Welcome back</h3><p class="muted small">Signed in as ${mask(v.email)} on this device.</p>
       <button class="btn primary block" id="instant">Apply now on ${co} →</button>
       <p class="err" id="err" hidden></p>
-      <p class="note">Independent page, not ${co}. I'm a referral partner and may earn a bonus if you're hired. <button class="linkish" id="notme">Not you?</button></p>`;
+      <p class="note">Independent page, not ${co}. I'm a referral partner and may earn a bonus if you're hired. <button class="linkish" id="notme">Not you?</button> · <a href="/alerts?d=${encodeURIComponent(dom)}">⚙️ Alert settings</a></p>`;
     document.getElementById('notme').onclick = () => { forget(); location.reload(); };
     document.getElementById('instant').onclick = async () => {
       const w = window.open('', '_blank');
@@ -78,8 +80,9 @@
     try {
       const d = await post({ action: 'capture', slug, email, alerts: document.getElementById('alerts').checked, website: document.getElementById('website').value, ref, by: by() });
       save({ token: d.token, email, code: d.code });
-      if (d.url) readyView(d.url);
-      else body.innerHTML = `<div class="ready"><div class="ok"><i>✓</i> You're on the list</div><p class="muted small">${document.getElementById('alerts').checked ? 'Check your inbox for the free guide. I\'ll email you when a role like this opens.' : 'Saved.'}</p><a class="btn ghost block" href="/">See open roles</a></div>`;
+      const al = document.getElementById('alerts').checked;
+      if (d.url) readyView(d.url, al ? d.token : '');
+      else body.innerHTML = `<div class="ready"><div class="ok"><i>✓</i> You're on the list</div><p class="muted small">${al ? 'Check your inbox for the free guide. I\'ll email you when a role like this opens.' : 'Saved.'}</p>${al ? `<a class="btn primary block" href="/alerts?d=${encodeURIComponent(dom)}#t=${encodeURIComponent(d.token)}">⚙️ Customize my job alerts</a><p class="note">Pick fields, open-to-all only, type of work or skills. Change it any time from your emails.</p>` : ''}<a class="btn ghost block" href="/">See open roles</a></div>`;
     } catch (e) {
       btn.disabled = false; btn.textContent = live ? 'Get my application link' : 'Get job alerts';
       er.textContent = e.message; er.hidden = false;

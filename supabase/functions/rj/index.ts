@@ -114,10 +114,12 @@ async function welcome(email: string, slug: string) {
   const unsub = `${NL}?u=${s?.unsub_token || ""}`;
   const base = await site();
   const jobLine = SLUG.test(slug) ? `<p>The role you were looking at stays here: <a href="${base}/j/${slug}">${base}/j/${slug}</a></p>` : "";
+  const { data: ld } = await db.from("rj_leads").select("token").eq("email", email).maybeSingle();
+  const prefsLine = ld ? `<div style="border:1px solid #e3e6ea;border-radius:12px;padding:14px 16px;margin:18px 0"><b>Only want certain roles?</b><br><span style="color:#555">Pick your fields, where you can apply from (e.g. open-to-all only), type of work and skills. I'll only email you matching roles.</span><br><a href="${prefsUrl(base, ld.token)}" style="display:inline-block;margin-top:10px;border:1.5px solid #4b2ee8;color:#4b2ee8;padding:9px 14px;border-radius:9px;text-decoration:none;font-weight:700">⚙️ Customize my alerts</a></div>` : "";
   try {
     await t.sendMail({
       from: FROM(), to: email, subject: "Your remote AI work guide (and job alerts are on)",
-      html: wrap(`<p>Hi,</p><p>Thanks for signing up. Here's the free guide I promised: how AI-training and annotation work actually works, where to find it, and how I prepared for the AI interview after failing twice.</p><p><a href="${base}/guide" style="display:inline-block;background:#4b2ee8;color:#fff;padding:12px 18px;border-radius:10px;text-decoration:none;font-weight:700">Open the guide</a></p>${jobLine}<p>From now on, when I find a remote AI role worth your time, you'll get a short email. No spam, and you can leave with one click.</p><p>Dijae</p>`, unsub),
+      html: wrap(`<p>Hi,</p><p>Thanks for signing up. Here's the free guide I promised: how AI-training and annotation work actually works, where to find it, and how I prepared for the AI interview after failing twice.</p><p><a href="${base}/guide" style="display:inline-block;background:#4b2ee8;color:#fff;padding:12px 18px;border-radius:10px;text-decoration:none;font-weight:700">Open the guide</a></p>${jobLine}<p>From now on, when I find a remote AI role worth your time, you'll get a short email. No spam, and you can leave with one click.</p>${prefsLine}<p>Dijae</p>`, unsub),
       headers: { "List-Unsubscribe": `<${unsub}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" },
     });
   } catch (_) { /* best effort */ }
@@ -142,6 +144,79 @@ async function welcomeZara(email: string) {
     });
   } catch (_) { /* best effort */ }
   t.close();
+}
+
+// ---------- alert preferences (each subscriber picks which roles they hear about) ----------
+// prefs: { fields: [domain], where: ["open" | country/region], types: ["full-time"|"part-time"|"contract"|"per-task"], skills: [tag] }
+// Empty list = everything in that group. A role is sent only if it matches every group that has picks.
+const TYPES = [["contract", "Contract / project"], ["per-task", "Paid per task"], ["part-time", "Part-time"], ["full-time", "Full-time"]];
+const kindOf = (jb: any) => { const t = String(jb.job_type || ""); return /full-time/i.test(t) ? "full-time" : /part-time/i.test(t) ? "part-time" : /per task/i.test(t) ? "per-task" : "contract"; };
+const whereKeysOf = (jb: any) => { const e = jb.eligibility; if (!e || e.kind !== "countries") return ["open"]; return [String(e.short || "").replace(/ only$/, "")]; };
+const tagsOf = (jb: any) => (jb.tags && jb.tags.length ? jb.tags : (jb.skills || []).slice(0, 3));
+function cleanPrefs(p: any) {
+  const list = (v: unknown, n = 40) => Array.from(new Set((Array.isArray(v) ? v : []).map((x) => String(x).trim().slice(0, 80)).filter(Boolean))).slice(0, n);
+  return { fields: list(p?.fields), where: list(p?.where), types: list(p?.types).filter((t) => TYPES.some(([k]) => k === t)), skills: list(p?.skills) };
+}
+function prefsMatch(jb: any, p: any) {
+  if (!p) return true;
+  if ((p.fields || []).length && !p.fields.includes(jb.domain)) return false;
+  if ((p.where || []).length && !whereKeysOf(jb).some((k) => p.where.includes(k))) return false;
+  if ((p.types || []).length && !p.types.includes(kindOf(jb))) return false;
+  if ((p.skills || []).length && !tagsOf(jb).some((t: string) => p.skills.includes(t))) return false;
+  return true;
+}
+const prefsUrl = (base: string, token: string) => `${base}/alerts#t=${token}`;
+async function prefsGet(b: any) {
+  const token = String(b.token || "");
+  if (!/^[0-9a-f-]{36}$/.test(token)) return j({ error: "This settings link isn't valid." }, 400);
+  const { data: lead } = await db.from("rj_leads").select("email,alerts,alert_prefs").eq("token", token).maybeSingle();
+  if (!lead) return j({ error: "This settings link has expired. Enter your email to get a new one.", reset: true }, 404);
+  const { data: sub } = await db.from("nl_subscribers").select("tags,status,unsub_token").eq("email", lead.email).maybeSingle();
+  const subscribed = !!sub && sub.status === "subscribed" && (sub.tags || []).includes("job-alerts");
+  const { data: jobs } = await db.from("rj_jobs").select("domain,job_type,tags,skills,eligibility").eq("status", "live");
+  const cnt = (f: (x: any) => string[]) => { const c: Record<string, number> = {}; for (const x of jobs || []) for (const k of f(x)) c[k] = (c[k] || 0) + 1; return Object.entries(c).sort((a, z) => z[1] - a[1]).map(([name, count]) => ({ name, count })); };
+  const p = cleanPrefs(lead.alert_prefs || {});
+  const keep = (opts: any[], picked: string[]) => [...opts, ...picked.filter((x) => !opts.some((o) => o.name === x)).map((name) => ({ name, count: 0 }))];
+  const typeCounts = cnt((x) => [kindOf(x)]);
+  return j({
+    email: lead.email.replace(/^(.)(.*)(@.*)$/, (_m: string, a: string, bb: string, c: string) => a + "•".repeat(Math.min(6, bb.length)) + c),
+    subscribed, unsub: sub ? `${NL}?u=${sub.unsub_token}` : null, prefs: p,
+    options: {
+      fields: keep(cnt((x) => [x.domain]), p.fields),
+      where: keep(cnt(whereKeysOf), p.where),
+      types: TYPES.map(([k, label]) => ({ name: k, label, count: (typeCounts.find((t) => t.name === k) || { count: 0 }).count })),
+      skills: keep(cnt(tagsOf).slice(0, 24), p.skills),
+    },
+    live: (jobs || []).length,
+  });
+}
+async function prefsSet(req: Request, b: any) {
+  const token = String(b.token || "");
+  if (!/^[0-9a-f-]{36}$/.test(token)) return j({ error: "This settings link isn't valid." }, 400);
+  const { data: lead } = await db.from("rj_leads").select("id,email").eq("token", token).maybeSingle();
+  if (!lead) return j({ error: "This settings link has expired.", reset: true }, 404);
+  const p = cleanPrefs(b.prefs || {});
+  await db.from("rj_leads").update({ alert_prefs: p, prefs_updated_at: new Date().toISOString(), alerts: true, updated_at: new Date().toISOString() }).eq("id", lead.id);
+  // Saving preferences also (re)turns alerts on: the person is asking to receive them.
+  if (b.subscribe) await subscribeAlerts(lead.email, req.headers.get("x-forwarded-for")?.split(",")[0] || null, (req.headers.get("user-agent") || "").slice(0, 300));
+  return j({ ok: true, prefs: p });
+}
+// Emails a fresh settings link (for people on another device or who lost the email). Same answer either way.
+async function prefsLink(b: any) {
+  const email = String(b.email || "").trim().toLowerCase();
+  if (!EMAIL.test(email)) return j({ error: "Please enter a valid email." }, 400);
+  const { data: lead } = await db.from("rj_leads").select("token,prefs_link_at").eq("email", email).maybeSingle();
+  if (lead && (!lead.prefs_link_at || Date.now() - Date.parse(lead.prefs_link_at) > 60000)) {
+    const t = transport();
+    if (t) {
+      await db.from("rj_leads").update({ prefs_link_at: new Date().toISOString() }).eq("email", email);
+      const base = await site();
+      const { data: s } = await db.from("nl_subscribers").select("unsub_token").eq("email", email).maybeSingle();
+      try { await t.sendMail({ from: FROM(), to: email, subject: "Your job alert settings", html: wrap(`<p>Hi,</p><p>Here's your link to choose which remote AI roles you get alerts for: field, where you can apply from, type of work and skills.</p><p><a href="${prefsUrl(base, lead.token)}" style="display:inline-block;background:#4b2ee8;color:#fff;padding:12px 18px;border-radius:10px;text-decoration:none;font-weight:700">Choose my alerts</a></p><p style="color:#555">The link works any time. Keep this email to change your choices later.</p><p>Dijae</p>`, `${NL}?u=${s?.unsub_token || ""}`) }); } catch (_) { /* best effort */ }
+      t.close();
+    }
+  }
+  return j({ ok: true });
 }
 
 async function go(b: any) {
@@ -499,7 +574,7 @@ async function admin(b: any, email: string) {
     return j({ ok: true });
   }
   if (a === "leads") {
-    const { data, error } = await db.from("rj_leads").select("email,alerts,first_job,source,created_at,ref_code,referred_by").order("created_at", { ascending: false }).limit(2000);
+    const { data, error } = await db.from("rj_leads").select("email,alerts,first_job,source,created_at,ref_code,referred_by,alert_prefs").order("created_at", { ascending: false }).limit(2000);
     if (error) return j({ error: error.message }, 500);
     const { count } = await db.from("nl_subscribers").select("id", { count: "exact", head: true }).contains("tags", ["job-alerts"]).eq("status", "subscribed");
     // Per-sharer activity: page visits and apply clicks that came through links carrying their code.
@@ -566,20 +641,25 @@ async function admin(b: any, email: string) {
   return j({ error: "unknown action" }, 400);
 }
 
-async function alertHtml(slugs: string[], first: string) {
-  const base = await site();
-  const { data: jobs } = await db.from("rj_jobs").select("slug,title,pay_text,job_type,domain,about").in("slug", slugs).eq("status", "live");
-  const cards = (jobs || []).map((x: any) => `<div style="border:1px solid #e3e6ea;border-radius:12px;padding:16px 18px;margin:12px 0"><div style="font-size:12px;color:#5b616b;text-transform:none">${esc(x.domain)} · ${esc(x.job_type || "Remote")}</div><div style="font-size:19px;font-weight:800;margin:4px 0">${esc(x.title)}</div>${x.pay_text ? `<div style="color:#0b7a52;font-weight:700">${esc(x.pay_text)} <span style="color:#777;font-weight:400">(as posted)</span></div>` : ""}<p style="margin:8px 0 12px;color:#333">${esc(String(x.about || "").slice(0, 220))}${String(x.about || "").length > 220 ? "…" : ""}</p><a href="${base}/j/${x.slug}?ref=alert" style="display:inline-block;background:#4b2ee8;color:#fff;padding:10px 16px;border-radius:9px;text-decoration:none;font-weight:700">See the role</a></div>`).join("");
-  return { html: `<p>Hi ${esc(first || "there")},</p><p>New remote AI role${(jobs || []).length > 1 ? "s" : ""} worth a look:</p>${cards}<p style="color:#555">Apply only where you could talk for 20 minutes about real work you've done. Pay and openings are as posted and can change.</p><p>Dijae</p>`, n: (jobs || []).length };
+async function alertJobs(slugs: string[]) {
+  const { data } = await db.from("rj_jobs").select("slug,title,pay_text,job_type,domain,about,tags,skills,eligibility").in("slug", slugs).eq("status", "live");
+  return data || [];
+}
+function alertHtml(base: string, jobs: any[], first: string, settings: string) {
+  const cards = jobs.map((x: any) => `<div style="border:1px solid #e3e6ea;border-radius:12px;padding:16px 18px;margin:12px 0"><div style="font-size:12px;color:#5b616b;text-transform:none">${esc(x.domain)} · ${esc(x.job_type || "Remote")}</div><div style="font-size:19px;font-weight:800;margin:4px 0">${esc(x.title)}</div>${x.eligibility && x.eligibility.label ? `<div style="display:inline-block;font-size:13px;font-weight:700;padding:3px 9px;border-radius:99px;margin:2px 0 6px;background:${x.eligibility.kind === "countries" ? "#fff4e0;color:#8a5200" : "#e6f6ee;color:#0b7a52"}">${esc(x.eligibility.label)}</div>` : ""}${x.pay_text ? `<div style="color:#0b7a52;font-weight:700">${esc(x.pay_text)} <span style="color:#777;font-weight:400">(as posted)</span></div>` : ""}<p style="margin:8px 0 12px;color:#333">${esc(String(x.about || "").slice(0, 220))}${String(x.about || "").length > 220 ? "…" : ""}</p><a href="${base}/j/${x.slug}?ref=alert" style="display:inline-block;background:#4b2ee8;color:#fff;padding:10px 16px;border-radius:9px;text-decoration:none;font-weight:700">See the role</a></div>`).join("");
+  const set = settings ? `<p style="font-size:14px;color:#555;border-top:1px solid #eee;padding-top:12px">Getting roles you don't want? <a href="${settings}" style="color:#4b2ee8;font-weight:700">⚙️ Customize my alerts</a> (field, where you can apply from, type of work, skills).</p>` : "";
+  return `<p>Hi ${esc(first || "there")},</p><p>New remote AI role${jobs.length > 1 ? "s" : ""} worth a look:</p>${cards}<p style="color:#555">Apply only where you could talk for 20 minutes about real work you've done. Pay and openings are as posted and can change.</p><p>Dijae</p>${set}`;
 }
 async function alertStep(id: number, test: boolean, adminEmail: string) {
   const { data: al } = await db.from("rj_alerts").select("*").eq("id", id).maybeSingle();
   if (!al) return j({ error: "Alert not found." }, 404);
   const t = transport();
   if (!t) return j({ error: "Email isn't set up (Zoho SMTP secrets missing)." }, 500);
+  const base = await site();
+  const jobs = await alertJobs(al.job_slugs);
   if (test) {
-    const { html, n } = await alertHtml(al.job_slugs, "Dijae");
-    if (!n) { t.close(); return j({ error: "None of the selected jobs are live." }, 400); }
+    if (!jobs.length) { t.close(); return j({ error: "None of the selected jobs are live." }, 400); }
+    const html = alertHtml(base, jobs, "Dijae", `${base}/alerts`);
     try { await t.sendMail({ from: FROM(), to: adminEmail, subject: "[TEST] " + al.subject, html: wrap(html, NL) }); } catch (e) { t.close(); return j({ error: String(e).slice(0, 200) }, 500); }
     t.close(); await db.from("rj_alerts").delete().eq("id", id); return j({ ok: true, test: true });
   }
@@ -588,21 +668,28 @@ async function alertStep(id: number, test: boolean, adminEmail: string) {
   const { data: subs } = await db.from("nl_subscribers").select("id,email,first_name,unsub_token").eq("status", "subscribed").contains("tags", ["job-alerts"]).order("id").limit(10000);
   const todo = (subs || []).filter((s: any) => !skip.has(s.id));
   const batch = todo.slice(0, 25);
-  let ok = 0, bad = 0;
+  const { data: leads } = await db.from("rj_leads").select("email,token,alert_prefs").in("email", batch.map((s: any) => s.email));
+  const leadOf: Record<string, any> = Object.fromEntries((leads || []).map((l: any) => [l.email, l]));
+  let ok = 0, bad = 0, skipped = 0;
   for (const s of batch) {
     const unsub = `${NL}?u=${s.unsub_token}`;
-    const { html } = await alertHtml(al.job_slugs, (s.first_name || "").trim());
+    const ld = leadOf[s.email];
+    // Only the roles that match this person's alert choices; skip them entirely if none do.
+    const mine = jobs.filter((x: any) => prefsMatch(x, ld ? cleanPrefs(ld.alert_prefs || {}) : null));
+    if (!mine.length) { skipped++; await db.from("rj_alert_sends").insert({ alert_id: id, subscriber_id: s.id, status: "skipped", error: "No roles match their alert choices", jobs: 0 }); continue; }
+    const html = alertHtml(base, mine, (s.first_name || "").trim(), ld ? prefsUrl(base, ld.token) : "");
+    const subject = mine.length === jobs.length ? al.subject : mine.length === 1 ? `New role: ${mine[0].title}${mine[0].pay_text ? ` (${mine[0].pay_text})` : ""}` : al.subject;
     let st = "sent", err: string | null = null;
-    try { await t.sendMail({ from: FROM(), to: s.email, subject: al.subject, html: wrap(html, unsub), headers: { "List-Unsubscribe": `<${unsub}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" } }); ok++; }
+    try { await t.sendMail({ from: FROM(), to: s.email, subject, html: wrap(html, unsub), headers: { "List-Unsubscribe": `<${unsub}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" } }); ok++; }
     catch (e) { st = "failed"; err = String(e).slice(0, 300); bad++; }
-    await db.from("rj_alert_sends").insert({ alert_id: id, subscriber_id: s.id, status: st, error: err });
+    await db.from("rj_alert_sends").insert({ alert_id: id, subscriber_id: s.id, status: st, error: err, jobs: mine.length });
   }
   t.close();
   const remaining = todo.length - batch.length;
   const upd: any = { sent: al.sent + ok, failed: al.failed + bad };
   if (remaining <= 0) { upd.status = "sent"; upd.finished_at = new Date().toISOString(); }
   await db.from("rj_alerts").update(upd).eq("id", id);
-  return j({ sent: upd.sent, failed: upd.failed, remaining });
+  return j({ sent: upd.sent, failed: upd.failed, skipped, remaining });
 }
 
 Deno.serve(async (req) => {
@@ -629,6 +716,9 @@ Deno.serve(async (req) => {
     try { b = JSON.parse((await req.text()).slice(0, 300000)); } catch { return j({ error: "bad json" }, 400); }
     if (b.action === "capture") return await capture(req, b);
     if (b.action === "go") return await go(b);
+    if (b.action === "prefs_get") return await prefsGet(b);
+    if (b.action === "prefs_set") return await prefsSet(req, b);
+    if (b.action === "prefs_link") return await prefsLink(b);
     if (b.action === "code" && b.token) {
       const token = String(b.token || "");
       if (!/^[0-9a-f-]{36}$/.test(token)) return j({ error: "bad request" }, 400);

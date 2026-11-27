@@ -389,6 +389,7 @@
     app.innerHTML = '<div class="adm"><p class="muted">Loading…</p></div>';
     const d = await api({ action: 'leads' });
     const L = d.leads || [], SH = d.shares || {};
+    const prefTxt = (x) => { const p = x.alert_prefs || {}; return [...(p.where || []).map((w) => (w === 'open' ? 'Open to all' : w)), ...(p.types || []), ...(p.fields || []), ...(p.skills || [])].join(', '); };
     const byCode = {}; L.forEach((x) => { if (x.ref_code) byCode[x.ref_code] = x; });
     const joined = {}; L.forEach((x) => { if (x.referred_by) joined[x.referred_by] = (joined[x.referred_by] || 0) + 1; });
     const codes = Array.from(new Set([...Object.keys(SH), ...Object.keys(joined)]));
@@ -401,7 +402,7 @@
       ${top.slice(0, 100).map((t) => `<tr><td>${esc(t.who)}</td><td><code>${esc(t.c)}</code></td><td>${t.views}</td><td>${t.applies}</td><td><b>${t.joined}</b></td></tr>`).join('') || '<tr><td colspan="5" class="muted">No shared visits yet.</td></tr>'}</table></div>
       <h2>All leads</h2>
       <div class="panel" style="overflow-x:auto" tabindex="0" aria-label="Leads table"><table class="t"><tr><th>Email</th><th>Code</th><th>Referred by</th><th>Alerts</th><th class="hm">First role</th><th class="hm">Source</th><th>Date</th></tr>
-      ${L.slice(0, 500).map((x) => `<tr><td>${esc(x.email)}</td><td><code>${esc(x.ref_code || '')}</code></td><td>${refBy(x)}</td><td>${x.alerts ? '✓' : '—'}</td><td class="hm">${esc(x.first_job || '')}</td><td class="hm">${esc(x.source || '')}</td><td>${esc(x.created_at.slice(0, 10))}</td></tr>`).join('') || '<tr><td colspan="7" class="muted">No leads yet.</td></tr>'}</table></div></div>`;
+      ${L.slice(0, 500).map((x) => `<tr><td>${esc(x.email)}</td><td><code>${esc(x.ref_code || '')}</code></td><td>${refBy(x)}</td><td>${x.alerts ? '✓' : '—'}${prefTxt(x) ? `<br><small class="muted" title="Alert choices">⚙️ ${esc(prefTxt(x))}</small>` : ''}</td><td class="hm">${esc(x.first_job || '')}</td><td class="hm">${esc(x.source || '')}</td><td>${esc(x.created_at.slice(0, 10))}</td></tr>`).join('') || '<tr><td colspan="7" class="muted">No leads yet.</td></tr>'}</table></div></div>`;
     $('#csv').onclick = () => {
       const rows = [['email', 'ref_code', 'referred_by_code', 'referred_by_email', 'alerts', 'first_job', 'source', 'created_at'], ...L.map((x) => [x.email, x.ref_code || '', x.referred_by || '', x.referred_by && byCode[x.referred_by] ? byCode[x.referred_by].email : '', x.alerts, x.first_job || '', x.source || '', x.created_at])];
       const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n')], { type: 'text/csv' })); a.download = 'remote-ai-work-leads.csv'; a.click();
@@ -425,7 +426,8 @@
       try {
         const s = await api({ action: 'alert_start', slugs: pick(), subject: $('#sub').value });
         $('#pg').hidden = false; let r, total = null;
-        do { r = await api({ action: 'alert_step', id: s.id }); total = total || (r.sent + r.failed + r.remaining) || 1; $('#pg i').style.width = Math.round((r.sent + r.failed) / total * 100) + '%'; $('#pst').textContent = `${r.sent} sent · ${r.failed} failed · ${r.remaining} left`; } while (r.remaining > 0);
+        let sk = 0;
+        do { r = await api({ action: 'alert_step', id: s.id }); sk += r.skipped || 0; total = total || (r.sent + r.failed + sk + r.remaining) || 1; $('#pg i').style.width = Math.round((r.sent + r.failed + sk) / total * 100) + '%'; $('#pst').textContent = `${r.sent} sent · ${sk} skipped (their alert choices don't match) · ${r.failed} failed · ${r.remaining} left`; } while (r.remaining > 0);
         toast('Alert sent');
       } catch (e) { err(e.message); }
     };

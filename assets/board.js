@@ -101,7 +101,8 @@
       if (!r.ok) throw new Error(d.error || 'Something went wrong.');
       const v = JSON.stringify({ token: d.token, email, code: d.code });
       if (window.RJ_SET_LEAD) window.RJ_SET_LEAD({ token: d.token, email, code: d.code }); else { try { localStorage.setItem('rj_lead', v); } catch (x) {} document.cookie = `rj_lead=${encodeURIComponent(v)}; Max-Age=${365 * 86400}; Path=/; SameSite=Lax; Secure`; }
-      f.innerHTML = '<b>You\'re on the list ✓</b><span class="muted small">Check your inbox for the free guide. Any role page now opens with one click.</span><a class="btn ghost block" href="/guide">Open the guide now</a>';
+      const dq = CAT && CAT.k === 'd' ? '?d=' + encodeURIComponent(CAT.v) : D ? '?d=' + encodeURIComponent(D) : '';
+      f.innerHTML = `<b>You're on the list ✓</b><span class="muted small">Check your inbox for the free guide. Any role page now opens with one click.</span><a class="btn primary block" href="/alerts${dq}#t=${encodeURIComponent(d.token)}">⚙️ Customize my alerts</a><span class="muted small">Only want certain fields, open-to-all roles or one type of work? Pick them now, or any time from the link in your emails.</span><a class="btn ghost block" href="/guide">Open the guide now</a>`;
     } catch (x) { b.disabled = false; b.textContent = 'Send me alerts'; er.textContent = x.message; er.hidden = false; }
   });
 })();
